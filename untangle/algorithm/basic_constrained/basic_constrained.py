@@ -2,16 +2,15 @@
 
 import jax, jax.numpy as jnp
 import multiprocessing as mp
-from scipy.linalg import block_diag
+from numpy.polynomial import Polynomial
 
 from beartype import beartype
 from beartype.typing import Tuple, Callable
 from jaxtyping import jaxtyped, Array, Float, ArrayLike
 
 from untangle.decomposition import run_many_cpd_constrained
+from untangle.algorithm.common import inference_polynomial
 from untangle.utils import make_log, make_polynomials
-
-from numpy.polynomial import Polynomial
 
 def integrate(dcoefs, Z, y, W):
     assert dcoefs.shape[1] == W.shape[1]
@@ -76,7 +75,7 @@ def decoupling_basic_constrained(
     Callable,
     Tuple[Float[Array, 'n r'], Float[Array, 'm r'], Float[Array, 'd r']],
 ]:
-    '''Basic decoupling with additional polynomial constraint on 3rd factor.
+    '''Basic decoupling with additional polynomial constraints on 3rd factor.
 
     Args description (below) assumes the initial function takes m inputs and returns n outputs.
 
@@ -103,11 +102,5 @@ def decoupling_basic_constrained(
     log('Recovering internals by integrating...')
     coefs = integrate(dcoefs, Z, Y, W)
 
-    return inference(W, V, coefs.T), factors
+    return inference_polynomial(W, V, coefs.T), factors
 
-def inference(
-    W: Float[ArrayLike, 'n r'], 
-    V: Float[ArrayLike, 'm r'], 
-    coefs: Float[ArrayLike, 'r d'],
-) -> Callable:
-    return lambda x: W @ make_polynomials(coefs)(V.T @ x)

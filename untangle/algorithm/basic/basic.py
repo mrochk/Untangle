@@ -2,14 +2,15 @@
 
 import jax, jax.numpy as jnp
 import multiprocessing as mp
-from scipy.linalg import block_diag
 
 from beartype import beartype
 from beartype.typing import Tuple, Callable
-from jaxtyping import jaxtyped, Array, Float, ArrayLike
+from jaxtyping import jaxtyped, Array, Float
 
+from untangle.algorithm.common import inference_polynomial
 from untangle.decomposition import run_many_cpd
 from untangle.utils import make_log, make_polynomials
+from untangle.ops import vandermonde_vector, block_diag
 
 @jaxtyped(typechecker=beartype)
 def decoupling_basic(
@@ -20,10 +21,8 @@ def decoupling_basic(
     degree: int = 3,
     n_init: int = mp.cpu_count(),
     verbose: int = 0,
-) -> Tuple[
-    Callable,
-    Tuple[Float[Array, 'n r'], Float[Array, 'm r'], Float[Array, 'r d']],
-]:
+) -> Tuple[Callable, Tuple[Float[Array, 'n r'], Float[Array, 'm r'], Float[Array, 'r d']]]:
+
     '''Basic decoupling algorithm as described in https://arxiv.org/pdf/1410.4060.
 
     Args description (below) assumes the initial function takes m inputs and returns n outputs.
@@ -50,10 +49,9 @@ def decoupling_basic(
 
     log('Recovering internal coefficients...')
     coefs = find_internals_coefficients(X, Y, W, V, degree)
+    ret = (W, V, coefs)
 
-    f = inference(W, V, coefs)
-
-    return f, (W, V, coefs)
+    return inference_polynomial(*ret), ret
 
 def find_internals_coefficients(
     X: Float[Array, 'N m'],
@@ -66,27 +64,16 @@ def find_internals_coefficients(
     N = X.shape[0]
     rank = W.shape[1]
 
-    def vandermonde_diag(X, d: int):
-        def vandermonde_vector(v, d): 
-            return jnp.array([v**e for e in range(0, d+1)])
+    def vand_diag(X, d: int):
+        return block_diag([vandermonde_vector(x, d) for x in X])
 
-        return block_diag(*(vandermonde_vector(x, d) for x in X))
-
-    W_diag = block_diag(*(W for _ in range(N)))
+    W_diag = block_diag([W for _ in range(N)])
 
     Z = jnp.array([V.T @ x for x in X])
 
-    Xk = jnp.concatenate([vandermonde_diag(z, degree) for z in Z], axis=0)
+    Xk = jnp.concatenate([vand_diag(z, degree) for z in Z], axis=0)
 
     coefs = jnp.linalg.lstsq(W_diag @ Xk, jnp.concatenate(Y))[0].reshape(rank, -1)
     assert tuple(coefs.shape) == (rank, degree+1)
 
     return coefs
-
-@jaxtyped(typechecker=beartype)
-def inference(
-    W: Float[ArrayLike, 'n r'], 
-    V: Float[ArrayLike, 'm r'], 
-    coefs: Float[ArrayLike, 'r d'],
-) -> Callable:
-    return lambda x: W @ make_polynomials(coefs)(V.T @ x)

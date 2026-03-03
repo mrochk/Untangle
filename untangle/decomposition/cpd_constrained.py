@@ -3,49 +3,12 @@ from functools import partial
 
 from jaxtyping import jaxtyped, Array, Float
 from beartype import beartype 
-from beartype.typing import Tuple, Optional, Iterable
+from beartype.typing import Tuple, Optional
 
 from untangle.utils import relative_error, get_random_key
 from untangle.ops import unfold_kolda, khatri_rao, reshape, block_diag, vandermonde_matrix
-from untangle.decomposition.common import init_cpd, solve_subproblem, column_normalize
-
-@jax.jit(static_argnames=('rank', 'degree'))
-def update_H_with_polynomial_constraint(
-    unfolded: Array,
-    X: Float[Array, 'N m'],
-    V: Float[Array, 'm r'],
-    W: Float[Array, 'n r'],
-    rank: int,
-    degree: int,
-):
-    Z = X @ V # inputs to g
-
-    vand_matrices = []
-    for r in range(rank):
-        vand = vandermonde_matrix(Z[:, r], degree)
-        vand_matrices.append(vand)
-
-    vand_diag = block_diag(vand_matrices)
-
-    KR = khatri_rao(V, W)
-    K = jnp.kron(KR, jnp.eye(X.shape[0]))
-    Z = K @ vand_diag
-
-    Zinv = jnp.linalg.pinv(Z)
-    dcoefs = Zinv @ reshape(unfolded, -1)
-    dcoefs = reshape(dcoefs, (degree+1, rank))
-
-    H = jnp.column_stack([Xi @ ci for Xi, ci in zip(vand_matrices, dcoefs.T)])
-    return H, dcoefs
-
-def normalize_columns_V(W: Float[Array, 'n r'], V: Float[Array, 'm r']):
-    rank = W.shape[1]
-    for i in range(rank):
-        colV, colW = V[:, i], W[:, i]
-        norm = jnp.linalg.norm(colV) + 1e-12
-        V = V.at[:, i].set(colV / norm)
-        W = W.at[:, i].set(colW * norm)
-    return W, V
+from untangle.decomposition.common import init_cpd, solve_subproblem
+from untangle.algorithm.common import normalize_columns_V
 
 @jaxtyped(typechecker=beartype)
 def cpd_constrained(
@@ -57,9 +20,11 @@ def cpd_constrained(
     random_state: Optional[Array] = None,
     tol: float = 1e-6,
     verbose: bool = False,
-) -> Tuple:
-    #Tuple[Float[Array, 'n r'], Float[Array, 'm r'], Float[Array, 'N r']],
-    #Float[Array, 'r'], Array,
+) -> Tuple[
+    Tuple[Float[Array, 'n r'], Float[Array, 'm r'], Float[Array, 'N r']],
+    Float[Array, 'd r'], 
+    Array,
+]:
     log = lambda *args: print(*args) if verbose else None
 
     norm = jnp.linalg.norm(tensor)
@@ -97,3 +62,32 @@ def cpd_constrained(
         errors.append(error)
 
     return factors, dcoefs, jnp.array(errors)
+
+@jax.jit(static_argnames=('rank', 'degree'))
+def update_H_with_polynomial_constraint(
+    unfolded: Array,
+    X: Float[Array, 'N m'],
+    V: Float[Array, 'm r'],
+    W: Float[Array, 'n r'],
+    rank: int,
+    degree: int,
+) -> Tuple[Float[Array, 'N r'], Float[Array, 'd r']]:
+    Z = X @ V # inputs to g
+
+    vand_matrices = []
+    for r in range(rank):
+        vand = vandermonde_matrix(Z[:, r], degree)
+        vand_matrices.append(vand)
+
+    vand_diag = block_diag(vand_matrices)
+
+    KR = khatri_rao(V, W)
+    K = jnp.kron(KR, jnp.eye(X.shape[0]))
+    Z = K @ vand_diag
+
+    Zinv = jnp.linalg.pinv(Z)
+    dcoefs = Zinv @ reshape(unfolded, -1)
+    dcoefs = reshape(dcoefs, (degree+1, rank))
+
+    H = jnp.column_stack([Xi @ ci for Xi, ci in zip(vand_matrices, dcoefs.T)])
+    return H, dcoefs

@@ -22,9 +22,10 @@ def khatri_rao(A: Float[Array, 'm k'], B: Float[Array, 'n k']) -> Float[Array, '
     return (A[:, None, :] * B[None, :, :]).reshape(m*n, k)
 
 @jax.jit
-def block_diag(arrays: ArrayLike) -> Array:
-    rows = sum(a.shape[0] for a in arrays)
-    cols = sum(a.shape[1] for a in arrays)
+def block_diag(arrays: list[ArrayLike]) -> Float[Array, 'a b']:
+    arrays = [jnp.atleast_2d(a) for a in arrays]
+    rows = sum([a.shape[0] for a in arrays])
+    cols = sum([a.shape[1] for a in arrays])
 
     result = jnp.zeros((rows, cols), dtype=arrays[0].dtype)
 
