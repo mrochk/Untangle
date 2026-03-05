@@ -8,7 +8,7 @@ from untangle.utils import get_random_key
 from untangle.ops import khatri_rao
 
 @jaxtyped(typechecker=beartype)
-def init_cpd(tensor: Float[Array, 'n m N'], rank: int, key = get_random_key()):
+def init_cpd(tensor: Float[Array, 'n m N'], rank: int, key: Array):
     n, m, N = tensor.shape
 
     W = jax.random.normal(key, shape=(n, rank))
