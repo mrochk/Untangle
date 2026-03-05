@@ -41,7 +41,7 @@ def decoupling_basic_constrained(
     Returns (f, (W, V, coefs)), where f is the callable decoupling, and (W, V, coefs) are the components.
     '''    
     
-    log = make_log(verbose)
+    log = make_log(verbose, '<basic-constrained>: ')
     log(f'Computing CP decomposition with polynomial constraint of J with rank {rank} and {n_init} (parallel) inits...')
 
     factors, dcoefs = run_many_cpd_constrained(J, X, rank, degree, verbose=verbose)

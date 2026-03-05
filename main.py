@@ -7,17 +7,8 @@ m, n, rank, f = POLYNOMIAL_2
 
 X, Y, J = collect_information(f, 20, m)
 
-d, (W, V, H, R) = cmtf_bsd(J, Y, X, rank, verbose=1)
-
-print('factor W:')
-print(W)
-
-print('\nfactor V:')
-print(V)
-
-print()
+d, (W, V, H, R), _ = cmtf_bsd(J, Y, X, rank, verbose=1, max_iters=200, random_state=get_random_key())
 
 x = jax.random.uniform(get_random_key(), m)
-
 print(f(x))
 print(d(x))

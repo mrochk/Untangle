@@ -19,14 +19,19 @@ def make_g(internals):
 def inference(W, V, g):
     return lambda x: W @ g(V.T @ x)
 
+@jax.jit
 def normalize_columns_V(W: Float[Array, 'n r'], V: Float[Array, 'm r']):
     rank = W.shape[1]
-    for i in range(rank):
+
+    def _(i, W_V):
+        W, V = W_V
         colV, colW = V[:, i], W[:, i]
         norm = jnp.linalg.norm(colV) + 1e-12
         V = V.at[:, i].set(colV / norm)
         W = W.at[:, i].set(colW * norm)
-    return W, V
+        return W, V
+
+    return jax.lax.fori_loop(0, rank, _, (W, V))
 
 def fit_internal(u_s, r_s):
     return make_smoothing_spline(u_s, r_s)

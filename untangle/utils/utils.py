@@ -6,8 +6,12 @@ from jaxtyping import jaxtyped, Float, Array
 from beartype.typing import Callable, Tuple, Optional
 from beartype import beartype
 
-def make_log(verbose: int) -> Callable[[], None]:
-    return (lambda *args: print(*args) if verbose > 0 else None)
+def make_log(verbose: int, prefix: str = '') -> Callable[[], None]:
+    def log(*args):
+        if verbose > 0:
+            print(prefix, end='')
+            print(*args, flush=True)
+    return log
 
 def get_random_key() -> Array:
     random_int = random.randint(0, 10_000)

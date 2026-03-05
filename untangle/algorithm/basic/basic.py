@@ -39,7 +39,7 @@ def decoupling_basic(
     Returns (f, (W, V, coefs)), where f is the callable decoupling, and (W, V, coefs) are the components.
     '''    
     
-    log = make_log(verbose)
+    log = make_log(verbose, '<basic>: ')
     log(f'Computing CP decomposition of J with rank {rank} and {n_init} (parallel) inits...')
 
     factors, weights = run_many_cpd(J, rank, verbose=verbose, n=n_init)

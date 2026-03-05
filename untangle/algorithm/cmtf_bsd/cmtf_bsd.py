@@ -40,27 +40,22 @@ def cmtf_bsd(
     random_state: Array = get_random_key(),
     verbose: int = 0,
 ):
-
-    log = make_log(verbose)
+    log = make_log(verbose, '<CMTF-BSD>: ')
+    best_errors = []
 
     W, V, H, R = init_cmtf(J, rank, random_state)
 
+    lstsq = jax.jit(jnp.linalg.lstsq)
+
     for iteration in range(max_iters):
-        W = cmtf_lstsq(
-            X1=khatri_rao(H, V), X2=R,
-            Y1=unfold_kolda(J, 0).T, Y2=Y,
-            lam=lam,
-        )
-        V = jnp.linalg.lstsq(khatri_rao(H, W), unfold_kolda(J, 1).T)[0].T
+        W = cmtf_lstsq(X1=khatri_rao(H, V), X2=R, Y1=unfold_kolda(J, 0).T, Y2=Y, lam=lam)
+        V = lstsq(khatri_rao(H, W), unfold_kolda(J, 1).T)[0].T
         W, V = normalize_columns_V(W, V)
 
-        H = jnp.linalg.lstsq(khatri_rao(V, W), unfold_kolda(J, 2).T)[0].T
+        H = lstsq(khatri_rao(V, W), unfold_kolda(J, 2).T)[0].T
+        R = lstsq(W, Y.T)[0].T
 
-        R = jnp.linalg.lstsq(W, Y.T)[0].T
-
-        U = X @ V
-
-        H, R = bsplines_projection(H, R, U, dof, degree, lam)
+        H, R = bsplines_projection(H, R, X @ V, dof, degree, lam)
 
         error = relative_error(J, (W, V, H))
 
@@ -69,12 +64,19 @@ def cmtf_bsd(
             best = (W, V, H, R)
 
         log(f'Iteration [{iteration+1} / {max_iters}]: error = {error:.4f}, best = {best_error:.4f}')
+        best_errors.append(best_error)
 
     log(f'Returning best result with error = {best_error:.4f}')
 
     W, V, H, R = best
     g = make_g(fit_internals(X @ V, H, R, use='R'))
-    return inference(W, V, g), best
+    return inference(W, V, g), best, jnp.array(best_errors)
+
+@jax.jit
+def project(j, c, B, dB, H, R):
+    H = H.at[:, j].set(dB @ c)
+    R = R.at[:, j].set(B @ c)
+    return H, R
 
 def bsplines_projection(
     H: Float[Array, 'N r'],
@@ -84,12 +86,8 @@ def bsplines_projection(
     degree: int,
     lam: float,
 ):
-    rank = H.shape[1]
-
-    for j in range(rank):
-        u = U[:, j]
-        h = H[:, j]
-        r = R[:, j]
+    for rank in range(H.shape[1]):
+        u, h, r = U[:, rank], H[:, rank], R[:, rank]
 
         knots = determine_knots(u, dof, degree)
 
@@ -97,9 +95,7 @@ def bsplines_projection(
         dB = design_dmatrix(u, knots, degree)
 
         c = cmtf_lstsq(X1=dB, Y1=h, X2=B, Y2=r, lam=lam)
-
-        H = H.at[:, j].set(dB @ c)
-        R = R.at[:, j].set(B @ c)
+        H, R = project(rank, c, B, dB, H, R)
 
     return H, R
 
