@@ -14,9 +14,9 @@ from untangle.ops import vandermonde_vector, block_diag
 
 @jaxtyped(typechecker=beartype)
 def decoupling_basic(
-    X: Float[Array, 'N m'], 
-    Y: Float[Array, 'N n'], 
     J: Float[Array, 'n m N'], 
+    Y: Float[Array, 'N n'], 
+    X: Float[Array, 'N m'], 
     rank: int,
     degree: int = 3,
     n_init: int = mp.cpu_count(),

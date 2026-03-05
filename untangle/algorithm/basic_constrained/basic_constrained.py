@@ -6,11 +6,53 @@ from numpy.polynomial import Polynomial
 
 from beartype import beartype
 from beartype.typing import Tuple, Callable
-from jaxtyping import jaxtyped, Array, Float, ArrayLike
+from jaxtyping import jaxtyped, Array, Float
 
 from untangle.decomposition import run_many_cpd_constrained
 from untangle.algorithm.common import inference_polynomial
-from untangle.utils import make_log, make_polynomials
+from untangle.utils import make_log
+
+@jaxtyped(typechecker=beartype)
+def decoupling_basic_constrained(
+    J: Float[Array, 'n m N'], 
+    Y: Float[Array, 'N n'], 
+    X: Float[Array, 'N m'], 
+    rank: int,
+    degree: int = 3,
+    n_init: int = mp.cpu_count(),
+    verbose: int = 0,
+) -> Tuple[
+    Callable,
+    Tuple[Float[Array, 'n r'], Float[Array, 'm r'], Float[Array, 'd r']],
+]:
+    '''Basic decoupling with additional polynomial constraints on 3rd factor.
+
+    Args description (below) assumes the initial function takes m inputs and returns n outputs.
+
+    Args:
+        X: Operating points, of shape (N, m).
+        Y: Function outputs for X, of shape (N, n).
+        J: Stacked jacobian of shape (n, m, N).
+        rank: Rank of the CPD.
+        degree: Degree of internal polynomials. Defaults to 3.
+        n_init: Number of (parallel) decompositions to run. The best is kept and used for decoupling.
+        verbose: Verbose output from 0 to 2. Defaults to 0.
+
+    Returns (f, (W, V, coefs)), where f is the callable decoupling, and (W, V, coefs) are the components.
+    '''    
+    
+    log = make_log(verbose)
+    log(f'Computing CP decomposition with polynomial constraint of J with rank {rank} and {n_init} (parallel) inits...')
+
+    factors, dcoefs = run_many_cpd_constrained(J, X, rank, degree, verbose=verbose)
+    W, V, H = factors
+
+    Z = X @ V
+
+    log('Recovering internals by integrating...')
+    coefs = integrate(dcoefs, Z, Y, W)
+
+    return inference_polynomial(W, V, coefs.T), factors
 
 def integrate(dcoefs, Z, y, W):
     assert dcoefs.shape[1] == W.shape[1]
@@ -61,46 +103,3 @@ def integrate(dcoefs, Z, y, W):
     coefs = coefs.at[0, :].set(c_zeros)
 
     return coefs
-
-@jaxtyped(typechecker=beartype)
-def decoupling_basic_constrained(
-    X: Float[Array, 'N m'], 
-    Y: Float[Array, 'N n'], 
-    J: Float[Array, 'n m N'], 
-    rank: int,
-    degree: int = 3,
-    n_init: int = mp.cpu_count(),
-    verbose: int = 0,
-) -> Tuple[
-    Callable,
-    Tuple[Float[Array, 'n r'], Float[Array, 'm r'], Float[Array, 'd r']],
-]:
-    '''Basic decoupling with additional polynomial constraints on 3rd factor.
-
-    Args description (below) assumes the initial function takes m inputs and returns n outputs.
-
-    Args:
-        X: Operating points, of shape (N, m).
-        Y: Function outputs for X, of shape (N, n).
-        J: Stacked jacobian of shape (n, m, N).
-        rank: Rank of the CPD.
-        degree: Degree of internal polynomials. Defaults to 3.
-        n_init: Number of (parallel) decompositions to run. The best is kept and used for decoupling.
-        verbose: Verbose output from 0 to 2. Defaults to 0.
-
-    Returns (f, (W, V, coefs)), where f is the callable decoupling, and (W, V, coefs) are the components.
-    '''    
-    
-    log = make_log(verbose)
-    log(f'Computing CP decomposition with polynomial constraint of J with rank {rank} and {n_init} (parallel) inits...')
-
-    factors, dcoefs = run_many_cpd_constrained(J, X, rank, degree, verbose=verbose)
-    W, V, H = factors
-
-    Z = X @ V
-
-    log('Recovering internals by integrating...')
-    coefs = integrate(dcoefs, Z, Y, W)
-
-    return inference_polynomial(W, V, coefs.T), factors
-
