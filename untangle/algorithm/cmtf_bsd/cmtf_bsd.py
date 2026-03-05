@@ -1,5 +1,6 @@
 import jax, jax.numpy as jnp
 from scipy.interpolate import BSpline
+import matplotlib.pyplot as plt
 
 from jaxtyping import jaxtyped, Float, Array
 from beartype import beartype
@@ -56,6 +57,20 @@ def cmtf_bsd(
         R = lstsq(W, Y.T)[0].T
 
         H, R = bsplines_projection(H, R, X @ V, dof, degree, lam)
+
+        U = X @ V
+
+        fig, ax = plt.subplots(H.shape[1], figsize=(10, 20))
+        for j in range(rank):
+            u, h, r = U[:, j], H[:, j], R[:, j]
+            idx = jnp.argsort(u)
+            u_s, h_s, r_s = u[idx], h[idx], r[idx]
+
+            ax[j].scatter(u, r, color='green')
+            ax[j].scatter(u, h, color='red')
+
+        fig.savefig('fig.png')
+        plt.close()
 
         error = relative_error(J, (W, V, H))
 
