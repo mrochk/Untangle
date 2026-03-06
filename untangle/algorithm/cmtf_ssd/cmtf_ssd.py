@@ -8,6 +8,7 @@ from beartype import beartype
 from untangle.ops import unfold_kolda, khatri_rao
 from untangle.utils import get_random_key, relative_error, make_log
 from untangle.algorithm.common import normalize_columns_V, fit_internals, make_g, inference
+from untangle.decomposition.common import column_normalize
 
 from .spline import fit_with_deriv
 from scipy.interpolate import CubicSpline
@@ -59,11 +60,9 @@ def cmtf_ssd(
         H = lstsq(khatri_rao(V, W), unfold_kolda(J, 2).T)[0].T
         R = lstsq(W, Y.T)[0].T
 
-        U = X @ V
+        H, R, weights = smoothing_splines_projection(H, R, X @ V, gamma, smoothing)
 
-        H, R = smoothing_splines_projection(H, R, U, gamma, lam)
-
-        error = relative_error(J, (W, V, H))
+        error = relative_error(J, (W, V, H), weights)
 
         if iteration == 0 or error < best_error:
             best_error = error
@@ -78,15 +77,17 @@ def cmtf_ssd(
     g = make_g(fit_internals(X @ V, H, R, use='R'))
     return inference(W, V, g), best, jnp.array(best_errors)
 
-def smoothing_splines_projection(H, R, U, gamma: float, lam: float):
+def smoothing_splines_projection(H, R, U, gamma: float, smoothing: float):
+    weights = []
     for rank in range(H.shape[1]):
         u, h, r = U[:, rank], H[:, rank], R[:, rank]
+
         idx = jnp.argsort(u)
         us, hs, rs = u[idx], h[idx], r[idx]
 
-        m = fit_with_deriv(us, rs, hs, gamma, lam)
+        m = fit_with_deriv(us, rs, hs, gamma, smoothing)
 
-        spline = CubicSpline(us, m)
+        spline  = CubicSpline(us, m)
         dspline = spline.derivative()
 
         bias = (hs - dspline(us)).mean()
@@ -94,4 +95,10 @@ def smoothing_splines_projection(H, R, U, gamma: float, lam: float):
         H = H.at[:, rank].set(dspline(u) + bias)
         R = R.at[:, rank].set(spline(u))
 
-    return H, R
+        scale = jnp.linalg.norm(H[:, rank])
+        R = R.at[:, rank].set(R[:, rank] / scale)
+        H = H.at[:, rank].set(H[:, rank] / scale)
+
+        weights.append(scale)
+
+    return H, R, jnp.array(weights)

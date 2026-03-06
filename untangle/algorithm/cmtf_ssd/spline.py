@@ -57,6 +57,12 @@ def finite_difference_matrix(x):
         D = D.at[i, i-1].set(-h2 / (h1 * (h1 + h2)))
         D = D.at[i, i].set((h2 - h1) / (h1 * h2))
         D = D.at[i, i+1].set(h1 / (h2 * (h1 + h2)))
+    h = x[1] - x[0]
+    D = D.at[0,0].set(-1/h)
+    D = D.at[0,1].set(1/h)
+    h = x[-1] - x[-2]
+    D = D.at[-1,-2].set(-1/h)
+    D = D.at[-1,-1].set(1/h)
     return D
 
 def error(x, y, dy, gamma, lam):
