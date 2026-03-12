@@ -1,6 +1,6 @@
 import jax, jax.numpy as jnp
 from scipy.interpolate import BSpline
-import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 from jaxtyping import jaxtyped, Float, Array
 from beartype import beartype
@@ -37,7 +37,7 @@ def cmtf_bsd(
     lam: float = 0.1,
     degree: int = 3,
     dof: int = 12,
-    max_iters: int = 50,
+    iterations: int = 20,
     random_state: Array = get_random_key(),
     verbose: int = 0,
 ):
@@ -48,7 +48,7 @@ def cmtf_bsd(
 
     lstsq = jax.jit(jnp.linalg.lstsq)
 
-    for iteration in range(max_iters):
+    for iteration in tqdm(range(iterations), desc='Computing CMTF-BSD'):
         W = cmtf_lstsq(X1=khatri_rao(H, V), X2=R, Y1=unfold_kolda(J, 0).T, Y2=Y, lam=lam)
         V = lstsq(khatri_rao(H, W), unfold_kolda(J, 1).T)[0].T
         W, V = normalize_columns_V(W, V)
@@ -64,7 +64,7 @@ def cmtf_bsd(
             best_error = error
             best = (W, V, H, R)
 
-        log(f'Iteration [{iteration+1} / {max_iters}]: error = {error:.4f}, best = {best_error:.4f}')
+        log(f'Iteration [{iteration+1} / {iterations}]: error = {error:.4f}, best = {best_error:.4f}')
         best_errors.append(best_error)
 
     log(f'Returning best result with error = {best_error:.4f}')

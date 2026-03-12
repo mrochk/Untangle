@@ -1,9 +1,9 @@
-import numpy as np
 import jax, jax.numpy as jnp
 from scipy.interpolate import make_smoothing_spline
 from jaxtyping import jaxtyped, Float, Array
 from beartype import beartype
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 from untangle.ops import unfold_kolda, khatri_rao
 from untangle.utils import get_random_key, relative_error, make_log
@@ -24,7 +24,7 @@ def cmtf_ssd(
     X: Float[Array, 'N m'],
     rank: int,
     lam: float = 0.1,
-    max_iters: int = 50,
+    iterations: int = 20,
     random_state: Array = get_random_key(),
     verbose: int = 0,
 ):
@@ -35,7 +35,7 @@ def cmtf_ssd(
 
     lstsq = jax.jit(jnp.linalg.lstsq)
 
-    for iteration in range(max_iters):
+    for iteration in tqdm(range(iterations), desc='Computing CMTF-SSD'):
         W = cmtf_lstsq(X1=khatri_rao(H, V), X2=R, Y1=unfold_kolda(J, 0).T, Y2=Y, lam=lam)
         V = lstsq(khatri_rao(H, W), unfold_kolda(J, 1).T)[0].T
         W, V = normalize_columns_V(W, V)
@@ -55,7 +55,7 @@ def cmtf_ssd(
             best_error = error
             best = (W, V, H, R)
 
-        log(f'Iteration [{iteration+1} / {max_iters}]: error = {error:.4f}, best = {best_error:.4f}')
+        log(f'Iteration [{iteration+1} / {iterations}]: error = {error:.4f}, best = {best_error:.4f}')
         best_errors.append(best_error)
 
     log(f'Returning best result with error = {best_error:.4f}')
