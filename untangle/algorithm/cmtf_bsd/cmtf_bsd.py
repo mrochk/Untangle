@@ -41,7 +41,7 @@ def cmtf_bsd(
     random_state: Array = get_random_key(),
     verbose: int = 0,
 ):
-    log = make_log(verbose, '<CMTF-BSD>: ')
+    log = make_log(verbose, '|CMTF-BSD| -> ')
     best_errors = []
 
     W, V, H, R = init_cmtf(J, rank, random_state)

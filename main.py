@@ -14,7 +14,7 @@ warnings.simplefilter('ignore')
 
 num = 50
 
-m, r, rank, f = POLYNOMIAL_1
+m, r, rank, f = POLYNOMIAL_2
 
 # todo: create a f_scaled function
 
@@ -28,7 +28,7 @@ def f_scaled(x): return (f(x) - y_min) / y_range
 
 X, Y, J = collect_information(f_scaled, num, m, range=(0, 1), key=get_random_key())
 
-inf, best, errs = cmtf_ssd(J, Y, X, rank, max_iters=100, verbose=1)
+inf, best, errs = cmtf_ssd(J, Y, X, rank, max_iters=10, verbose=1)
 
 x = jax.random.uniform(get_random_key(), shape=m)
 

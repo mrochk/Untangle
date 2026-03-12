@@ -1,7 +1,8 @@
 import jax, jax.numpy as jnp
 from scipy.interpolate import make_smoothing_spline
 
-from jaxtyping import Float, Array
+from jaxtyping import jaxtyped, Float, Array
+from beartype import beartype
 from beartype.typing import Callable
 
 from untangle.utils import make_polynomials
@@ -58,3 +59,22 @@ def fit_internals(U, H, R, use: str = 'R'):
         internals.append(g)
 
     return internals
+
+@jaxtyped(typechecker=beartype)
+def init_cmtf(tensor: Float[Array, 'n m N'], rank: int, key: Array):
+    n, m, N = tensor.shape
+    keys = jax.random.split(key, num=4)
+
+    W = jax.random.normal(keys[0], shape=(n, rank))
+    V = jax.random.normal(keys[1], shape=(m, rank))
+    H = jax.random.normal(keys[2], shape=(N, rank))
+    R = jax.random.normal(keys[3], shape=(N, rank))
+
+    return W, V, H, R
+
+@jax.jit(static_argnames=('lam',))
+@jaxtyped(typechecker=beartype)
+def cmtf_lstsq(X1, X2, Y1, Y2, lam: float):
+    X = jnp.concatenate([X1, lam*X2], axis=0)
+    Y = jnp.concatenate([Y1, lam*Y2], axis=0)
+    return jnp.linalg.lstsq(X, Y)[0].T

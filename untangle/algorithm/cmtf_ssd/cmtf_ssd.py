@@ -1,36 +1,21 @@
+import numpy as np
 import jax, jax.numpy as jnp
-from scipy.interpolate import BSpline, make_smoothing_spline
-import matplotlib.pyplot as plt
-
+from scipy.interpolate import make_smoothing_spline
 from jaxtyping import jaxtyped, Float, Array
 from beartype import beartype
+import matplotlib.pyplot as plt
 
 from untangle.ops import unfold_kolda, khatri_rao
 from untangle.utils import get_random_key, relative_error, make_log
-from untangle.algorithm.common import normalize_columns_V, fit_internals, make_g, inference
-from untangle.decomposition.common import column_normalize
-
-from .spline import fit_with_derivatives, find_lambda_with_derivatives
-from scipy.interpolate import CubicSpline
-
-@jaxtyped(typechecker=beartype)
-def init_cmtf(tensor: Float[Array, 'n m N'], rank: int, key: Array):
-    n, m, N = tensor.shape
-    keys = jax.random.split(key, num=4)
-
-    W = jax.random.normal(keys[0], shape=(n, rank))
-    V = jax.random.normal(keys[1], shape=(m, rank))
-    H = jax.random.normal(keys[2], shape=(N, rank))
-    R = jax.random.normal(keys[3], shape=(N, rank))
-
-    return W, V, H, R
-
-@jax.jit(static_argnames=('lam',))
-@jaxtyped(typechecker=beartype)
-def cmtf_lstsq(X1, X2, Y1, Y2, lam: float):
-    X = jnp.concatenate([X1, lam*X2], axis=0)
-    Y = jnp.concatenate([Y1, lam*Y2], axis=0)
-    return jnp.linalg.lstsq(X, Y)[0].T
+from untangle.algorithm.common import (
+    normalize_columns_V, 
+    fit_internals, 
+    make_g,
+    inference,
+    init_cmtf,
+    cmtf_lstsq,
+)
+import untangle.algorithm.cmtf_ssd.spline as spline
 
 @jaxtyped(typechecker=beartype)
 def cmtf_ssd(
@@ -43,7 +28,7 @@ def cmtf_ssd(
     random_state: Array = get_random_key(),
     verbose: int = 0,
 ):
-    log = make_log(verbose, '<CMTF-SSD>: ')
+    log = make_log(verbose, '|CMTF-SSD| -> ')
     best_errors = []
 
     W, V, H, R = init_cmtf(J, rank, random_state)
@@ -70,11 +55,7 @@ def cmtf_ssd(
             best_error = error
             best = (W, V, H, R)
 
-        #g = make_g(fit_internals(X @ V, H, R, use='R'))
-        #inf = inference(W, V, g)
-        #inference_error = jnp.linalg.norm(jnp.array([inf(x) for x in X]) - Y) / jnp.linalg.norm(Y)
         log(f'Iteration [{iteration+1} / {max_iters}]: error = {error:.4f}, best = {best_error:.4f}')
-        #log(f'inference error = {inference_error:.4f}')
         best_errors.append(best_error)
 
     log(f'Returning best result with error = {best_error:.4f}')
@@ -83,15 +64,8 @@ def cmtf_ssd(
     g = make_g(fit_internals(X @ V, H, R, use='H'))
     return inference(W, V, g), best, jnp.array(best_errors)
 
-from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import RBF, WhiteKernel, Matern
-import numpy as np
-
-def smoothing_splines_projection(H, R, U, i = None):
-    gamma = 1.0
-
-    rank = H.shape[1]
-    fig, ax = plt.subplots(rank, 2, figsize=(10, 20))
+def smoothing_splines_projection(H, R, U, i: int = None):
+    fig, ax = plt.subplots(H.shape[1], 2, figsize=(10, 20))
 
     for rank in range(H.shape[1]):
         u, h, r = U[:, rank], H[:, rank], R[:, rank]
@@ -99,36 +73,26 @@ def smoothing_splines_projection(H, R, U, i = None):
         idx = jnp.argsort(u)
         inv = jnp.argsort(idx)
 
-        ax[rank, 0].scatter(u, r, color='blue')
-        ax[rank, 0].scatter(u, h, color='red')
+        us, hs, rs = u[idx], h[idx], r[idx]
 
-        us, hs, rs = np.array(u[idx]), np.array(h[idx]), np.array(r[idx])
+        hs_smooth = jnp.array(make_smoothing_spline(us, hs)(us))
 
-        dy_smooth = make_smoothing_spline(us, hs)(us)
-
-        ax[rank, 0].scatter(u, dy_smooth[inv], color='purple')
-
-        smoothing = find_lambda_with_derivatives(us, rs, dy_smooth, gamma)
-
-        smoothing = min(smoothing, 1)
-
-        m, dm, D = fit_with_derivatives(us, rs, dy_smooth, gamma, smoothing, dy_smooth)
-
-        m = m + (rs - m).mean()
-        dm = dm + (hs - dm).mean()
-
-        ax[rank, 1].scatter(u, m[inv], color='blue')
-        ax[rank, 1].scatter(u, dm[inv], color='red')
-        
-        ax[rank, 0].set_ylim((min(r.min(), h.min())-1, max(r.max(), h.max())+1))
-        ax[rank, 1].set_ylim((min(r.min(), h.min())-1, max(r.max(), h.max())+1))
+        m, dm = spline.fit_smoothing_spline(us, rs, hs_smooth)
 
         H = H.at[:, rank].set(dm[inv])
         R = R.at[:, rank].set(m[inv])
+
+        ax[rank, 0].scatter(u, r, color='blue')
+        ax[rank, 0].scatter(u, h, color='red')
+        ax[rank, 0].scatter(u, hs_smooth[inv], color='purple')
+        ax[rank, 1].scatter(u, m[inv], color='blue')
+        ax[rank, 1].scatter(u, dm[inv], color='red')
+        ax[rank, 0].set_ylim((min(r.min(), h.min())-1, max(r.max(), h.max())+1))
+        ax[rank, 1].set_ylim((min(r.min(), h.min())-1, max(r.max(), h.max())+1))
     
     plt.suptitle(f'Iteration #{i}')
     plt.tight_layout()
-    fig.savefig(f'iter{i}.png')
+    fig.savefig(f'plots/iter{i}.png')
     plt.close()
 
     return H, R
