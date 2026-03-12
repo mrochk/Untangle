@@ -8,43 +8,79 @@ from untangle.algorithm.cmtf_ssd.spline import *
 from untangle.utils import collect_information, get_random_key
 from untangle.utils.testing import *
 
-#num = 30
-#x = jnp.linspace(0, 1, num)
+import warnings
 
-#y = jnp.cos(4*jnp.pi*x) + jax.random.normal(jax.random.key(0), shape=num)
-#dy = -jnp.sin(4*jnp.pi*x) * 4*jnp.pi + jax.random.normal(jax.random.key(1), shape=num)
+warnings.simplefilter('ignore')
 
-#plt.scatter(x, y, label='y')
-#plt.scatter(x, dy, label='dy')
+num = 50
 
-#m = fit_with_deriv(x, y, dy, 10.0, 0.1)
-#spline = CubicSpline(x, m)
-#dspline = spline.derivative()
+m, r, rank, f = POLYNOMIAL_1
 
-#bias = (dy - dspline(x)).mean()
+# todo: create a f_scaled function
 
-#xx = jnp.linspace(0, 1, 100)
+X, Y, J = collect_information(f, num, m, range=(0, 1), key=get_random_key())
 
-#plt.plot(xx, spline(xx), label='spline')
-#plt.plot(xx, dspline(xx) + bias, label='dspline')
+y_min = jnp.min(Y, axis=0)
+y_max = jnp.max(Y, axis=0)
+y_range = y_max - y_min
 
-#plt.tight_layout()
-#plt.legend()
-#plt.savefig('fig.png')
+def f_scaled(x): return (f(x) - y_min) / y_range
 
-m, n, rank, f = POLYNOMIAL_1
+X, Y, J = collect_information(f_scaled, num, m, range=(0, 1), key=get_random_key())
 
-X, Y, J = collect_information(f, 20, m, range=(0, 1))
+inf, best, errs = cmtf_ssd(J, Y, X, rank, max_iters=100, verbose=1)
 
-#d, (W, V, H, R), _ = cmtf_bsd(J, Y, X, rank, verbose=1, max_iters=200, random_state=get_random_key())
+x = jax.random.uniform(get_random_key(), shape=m)
 
-d, (W, V, H, R), _ = cmtf_ssd(
-    J, Y, X, rank, verbose=1, max_iters=20, random_state=get_random_key(),
-    lam=0.1,
-    smoothing=0.1,
-    gamma=5.0,
-)
-
-x = jax.random.uniform(get_random_key(), m)
 print(f(x))
-print(d(x))
+print(inf(x) * y_range + y_min)
+
+#def f(x): return 2*x**3 - 3*x - 1
+
+#m = 1
+#n = 1
+
+#num = 100
+
+#X, Y, J = collect_information(f, num, m, range=(0, 1), key=get_random_key())
+
+#idx = jnp.argsort(X.flatten())
+#inv = jnp.argsort(idx)
+
+#Xs = X.flatten()[idx]
+#Ys = Y.flatten()[idx]
+#Js = J.flatten()[idx]
+
+#Ys_noisy = Ys + jax.random.normal(get_random_key(), num)
+
+#D = finite_difference_matrix(Xs)
+
+#from sklearn.gaussian_process import GaussianProcessRegressor
+#from sklearn.gaussian_process.kernels import RBF, WhiteKernel
+
+#kernel = RBF() + WhiteKernel()
+#gp = GaussianProcessRegressor(kernel=kernel, alpha=0.0)
+#gp.fit(Xs.reshape(-1, 1), Ys_noisy)
+
+## Differentiate the posterior mean numerically (or analytically with GPJax)
+#f_mean = lambda x: gp.predict(x.reshape(-1, 1))
+#DYs = D @ f_mean(Xs)  # or use a proper GP derivative kernel
+
+#plt.scatter(Xs, Ys, color='blue', label='y')
+#plt.scatter(Xs, DYs, color='red', label='D@y')
+#plt.scatter(Xs, Js, color='purple', label='y\'')
+#plt.legend()
+#plt.savefig('f.png')
+#plt.close()
+
+## todo: plot distribution of DYs
+#plt.hist(DYs, bins=30, color='red', edgecolor='black', alpha=0.7, density=True)
+#plt.axvline(jnp.mean(DYs), color='black', linestyle='--', label=f'mean={jnp.mean(DYs):.2f}')
+#plt.axvline(jnp.std(DYs), color='purple', linestyle='--', label=f'std')
+#plt.axvline(-jnp.std(DYs), color='purple', linestyle='--', label=f'std')
+#plt.xlabel('D @ y')
+#plt.ylabel('Density')
+#plt.title('Distribution of DYs')
+#plt.legend()
+#plt.savefig('DYs_dist.png')
+#plt.close()

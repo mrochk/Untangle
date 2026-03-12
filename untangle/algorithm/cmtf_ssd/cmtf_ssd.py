@@ -10,7 +10,7 @@ from untangle.utils import get_random_key, relative_error, make_log
 from untangle.algorithm.common import normalize_columns_V, fit_internals, make_g, inference
 from untangle.decomposition.common import column_normalize
 
-from .spline import fit_with_deriv
+from .spline import fit_with_derivatives, find_lambda_with_derivatives
 from scipy.interpolate import CubicSpline
 
 @jaxtyped(typechecker=beartype)
@@ -39,8 +39,6 @@ def cmtf_ssd(
     X: Float[Array, 'N m'],
     rank: int,
     lam: float = 0.1,
-    smoothing: float = 1.0,
-    gamma: float = 1.0,
     max_iters: int = 50,
     random_state: Array = get_random_key(),
     verbose: int = 0,
@@ -60,45 +58,77 @@ def cmtf_ssd(
         H = lstsq(khatri_rao(V, W), unfold_kolda(J, 2).T)[0].T
         R = lstsq(W, Y.T)[0].T
 
-        H, R, weights = smoothing_splines_projection(H, R, X @ V, gamma, smoothing)
+        H, R = smoothing_splines_projection(H, R, X @ V, iteration+1)
 
-        error = relative_error(J, (W, V, H), weights)
+        error = relative_error(J, (W, V, H))
+
+        if jnp.isnan(error):
+            W, V, H, R = init_cmtf(J, rank, random_state)
+            continue
 
         if iteration == 0 or error < best_error:
             best_error = error
             best = (W, V, H, R)
 
+        #g = make_g(fit_internals(X @ V, H, R, use='R'))
+        #inf = inference(W, V, g)
+        #inference_error = jnp.linalg.norm(jnp.array([inf(x) for x in X]) - Y) / jnp.linalg.norm(Y)
         log(f'Iteration [{iteration+1} / {max_iters}]: error = {error:.4f}, best = {best_error:.4f}')
+        #log(f'inference error = {inference_error:.4f}')
         best_errors.append(best_error)
 
     log(f'Returning best result with error = {best_error:.4f}')
 
     W, V, H, R = best
-    g = make_g(fit_internals(X @ V, H, R, use='R'))
+    g = make_g(fit_internals(X @ V, H, R, use='H'))
     return inference(W, V, g), best, jnp.array(best_errors)
 
-def smoothing_splines_projection(H, R, U, gamma: float, smoothing: float):
-    weights = []
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import RBF, WhiteKernel, Matern
+import numpy as np
+
+def smoothing_splines_projection(H, R, U, i = None):
+    gamma = 1.0
+
+    rank = H.shape[1]
+    fig, ax = plt.subplots(rank, 2, figsize=(10, 20))
+
     for rank in range(H.shape[1]):
         u, h, r = U[:, rank], H[:, rank], R[:, rank]
 
         idx = jnp.argsort(u)
-        us, hs, rs = u[idx], h[idx], r[idx]
+        inv = jnp.argsort(idx)
 
-        m = fit_with_deriv(us, rs, hs, gamma, smoothing)
+        ax[rank, 0].scatter(u, r, color='blue')
+        ax[rank, 0].scatter(u, h, color='red')
 
-        spline  = CubicSpline(us, m)
-        dspline = spline.derivative()
+        us, hs, rs = np.array(u[idx]), np.array(h[idx]), np.array(r[idx])
 
-        bias = (hs - dspline(us)).mean()
+        dy_smooth = make_smoothing_spline(us, hs)(us)
 
-        H = H.at[:, rank].set(dspline(u) + bias)
-        R = R.at[:, rank].set(spline(u))
+        ax[rank, 0].scatter(u, dy_smooth[inv], color='purple')
 
-        scale = jnp.linalg.norm(H[:, rank])
-        R = R.at[:, rank].set(R[:, rank] / scale)
-        H = H.at[:, rank].set(H[:, rank] / scale)
+        smoothing = find_lambda_with_derivatives(us, rs, dy_smooth, gamma)
 
-        weights.append(scale)
+        smoothing = min(smoothing, 1)
 
-    return H, R, jnp.array(weights)
+        m, dm, D = fit_with_derivatives(us, rs, dy_smooth, gamma, smoothing, dy_smooth)
+
+        m = m + (rs - m).mean()
+        dm = dm + (hs - dm).mean()
+
+        ax[rank, 1].scatter(u, m[inv], color='blue')
+        ax[rank, 1].scatter(u, dm[inv], color='red')
+        
+        ax[rank, 0].set_ylim((min(r.min(), h.min())-1, max(r.max(), h.max())+1))
+        ax[rank, 1].set_ylim((min(r.min(), h.min())-1, max(r.max(), h.max())+1))
+
+        H = H.at[:, rank].set(dm[inv])
+        R = R.at[:, rank].set(m[inv])
+    
+    plt.suptitle(f'Iteration #{i}')
+    plt.tight_layout()
+    fig.savefig(f'iter{i}.png')
+    plt.close()
+
+    return H, R

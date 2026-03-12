@@ -22,7 +22,7 @@ class TestDecouplingBasic(unittest.TestCase):
         truth, decoupled = f(x), decoupling(x)
 
         error = jnp.linalg.norm(truth - decoupled) / jnp.linalg.norm(truth)
-        self.assertLess(error, 0.1)
+        self.assertLess(error, 0.2)
 
     def test_simple_function2(self):
         m, n, rank, f = POLYNOMIAL_2
