@@ -21,3 +21,12 @@ def polynomial2(u):
     ])
 
 POLYNOMIAL_2 = (3, 5, 5, polynomial2)
+
+def periodic1(u):
+    u1, u2 = u
+    return jnp.array([
+        jnp.cos(4*jnp.pi*u1) + u2**2*0.5 - 1,
+        jnp.sin(4*jnp.pi*u2) + u1**3*0.5 + 1,
+    ])
+
+PERIODIC_1 = (2, 2, 3, periodic1)

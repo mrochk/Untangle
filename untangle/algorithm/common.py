@@ -14,7 +14,7 @@ def inference_polynomial(
 ) -> Callable:
     return lambda x: W @ make_polynomials(coefs)(V.T @ x)
 
-def make_g(internals):
+def make_internals(internals):
     return lambda u: jnp.array([gi(ui) for gi, ui in zip(internals, u)])
 
 def inference(W, V, g):
@@ -61,20 +61,22 @@ def fit_internals(U, H, R, use: str = 'R'):
     return internals
 
 @jaxtyped(typechecker=beartype)
-def init_cmtf(tensor: Float[Array, 'n m N'], rank: int, key: Array):
+def initialize(tensor: Float[Array, 'n m N'], rank: int, key: Array, with_R: bool = False):
     n, m, N = tensor.shape
     keys = jax.random.split(key, num=4)
 
     W = jax.random.normal(keys[0], shape=(n, rank))
     V = jax.random.normal(keys[1], shape=(m, rank))
     H = jax.random.normal(keys[2], shape=(N, rank))
-    R = jax.random.normal(keys[3], shape=(N, rank))
 
-    return W, V, H, R
+    if with_R:
+        R = jax.random.normal(keys[3], shape=(N, rank))
+        return W, V, H, R
+    else: return W, V, H
 
-@jax.jit(static_argnames=('lam',))
+@jax.jit
 @jaxtyped(typechecker=beartype)
-def cmtf_lstsq(X1, X2, Y1, Y2, lam: float):
+def cmtf_lstsq(X1, X2, Y1, Y2, lam):
     X = jnp.concatenate([X1, lam*X2], axis=0)
     Y = jnp.concatenate([Y1, lam*Y2], axis=0)
     return jnp.linalg.lstsq(X, Y)[0].T

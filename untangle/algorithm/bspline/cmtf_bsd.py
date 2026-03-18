@@ -7,7 +7,8 @@ from beartype import beartype
 
 from untangle.ops import unfold_kolda, khatri_rao
 from untangle.utils import get_random_key, relative_error, make_log
-from untangle.algorithm.common import normalize_columns_V, fit_internals, make_g, inference
+from untangle.algorithm.common import normalize_columns_V, fit_internals, make_internals, inference
+from scipy.interpolate import make_smoothing_spline
 
 @jaxtyped(typechecker=beartype)
 def init_cmtf(tensor: Float[Array, 'n m N'], rank: int, key: Array):
@@ -21,9 +22,8 @@ def init_cmtf(tensor: Float[Array, 'n m N'], rank: int, key: Array):
 
     return W, V, H, R
 
-@jax.jit(static_argnames=('lam',))
 @jaxtyped(typechecker=beartype)
-def cmtf_lstsq(X1, X2, Y1, Y2, lam: float):
+def cmtf_lstsq(X1, X2, Y1, Y2, lam):
     X = jnp.concatenate([X1, lam*X2], axis=0)
     Y = jnp.concatenate([Y1, lam*Y2], axis=0)
     return jnp.linalg.lstsq(X, Y)[0].T
@@ -34,7 +34,8 @@ def cmtf_bsd(
     Y: Float[Array, 'N n'],
     X: Float[Array, 'N m'],
     rank: int,
-    lam: float = 0.1,
+    lambda_min: float = 0.0,
+    lambda_max: float = 0.1,
     degree: int = 3,
     dof: int = 12,
     iterations: int = 20,
@@ -48,7 +49,10 @@ def cmtf_bsd(
 
     lstsq = jax.jit(jnp.linalg.lstsq)
 
+    lambdas = jnp.linspace(lambda_min, lambda_max, iterations)
+
     for iteration in tqdm(range(iterations), desc='Computing CMTF-BSD'):
+        lam = lambdas[iteration]
         W = cmtf_lstsq(X1=khatri_rao(H, V), X2=R, Y1=unfold_kolda(J, 0).T, Y2=Y, lam=lam)
         V = lstsq(khatri_rao(H, W), unfold_kolda(J, 1).T)[0].T
         W, V = normalize_columns_V(W, V)
@@ -70,7 +74,7 @@ def cmtf_bsd(
     log(f'Returning best result with error = {best_error:.4f}')
 
     W, V, H, R = best
-    g = make_g(fit_internals(X @ V, H, R, use='R'))
+    g = make_internals(fit_internals(X @ V, H, R, use='H'))
     return inference(W, V, g), best, jnp.array(best_errors)
 
 @jax.jit
@@ -87,15 +91,31 @@ def bsplines_projection(
     degree: int,
     lam: float,
 ):
+    smooth = True
+
     for rank in range(H.shape[1]):
         u, h, r = U[:, rank], H[:, rank], R[:, rank]
+
+        if smooth:
+            idx = jnp.argsort(u)
+            inv = jnp.argsort(idx)
+            us = u[idx]
+            hs = h[idx]
+            rs = r[idx]
+
+            dss = make_smoothing_spline(us, hs)
+            ss = make_smoothing_spline(us, rs)
+            h_smooth = dss(us)[inv]
+            r_smooth = ss(us)[inv]
 
         knots = determine_knots(u, dof, degree)
 
         B = design_matrix(u, knots, degree)
         dB = design_dmatrix(u, knots, degree)
 
-        c = cmtf_lstsq(X1=dB, Y1=h, X2=B, Y2=r, lam=lam)
+        if smooth: c = cmtf_lstsq(X1=dB, Y1=h_smooth, X2=B, Y2=r_smooth, lam=lam)
+        else: c = cmtf_lstsq(X1=dB, Y1=h, X2=B, Y2=r, lam=lam)
+
         H, R = project(rank, c, B, dB, H, R)
 
     return H, R
