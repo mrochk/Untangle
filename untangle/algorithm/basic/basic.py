@@ -11,9 +11,10 @@ from untangle.algorithm.common import inference_polynomial
 from untangle.decomposition import run_many_cpd
 from untangle.utils import make_log, make_polynomials
 from untangle.ops import vandermonde_vector, block_diag
+from untangle.algorithm.result import Decoupling
 
 @jaxtyped(typechecker=beartype)
-def decoupling_basic(
+def basic_decoupling(
     J: Float[Array, 'n m N'], 
     Y: Float[Array, 'N n'], 
     X: Float[Array, 'N m'], 
@@ -21,7 +22,7 @@ def decoupling_basic(
     degree: int = 3,
     n_init: int = mp.cpu_count(),
     verbose: int = 0,
-) -> Tuple[Callable, Tuple[Float[Array, 'n r'], Float[Array, 'm r'], Float[Array, 'r d']]]:
+) -> Decoupling:
 
     '''Basic decoupling algorithm as described in https://arxiv.org/pdf/1410.4060.
 
@@ -39,7 +40,7 @@ def decoupling_basic(
     Returns (f, (W, V, coefs)), where f is the callable decoupling, and (W, V, coefs) are the components.
     '''    
     
-    log = make_log(verbose, '<basic>: ')
+    log = make_log(verbose, '|BASIC| -> ')
     log(f'Computing CP decomposition of J with rank {rank} and {n_init} (parallel) inits...')
 
     factors, weights = run_many_cpd(J, rank, verbose=verbose, n=n_init)
@@ -49,9 +50,10 @@ def decoupling_basic(
 
     log('Recovering internal coefficients...')
     coefs = find_internals_coefficients(X, Y, W, V, degree)
-    ret = (W, V, coefs)
 
-    return inference_polynomial(*ret), ret
+    internals = make_polynomials(coefs)
+
+    return Decoupling((W, V, H), internals)
 
 def find_internals_coefficients(
     X: Float[Array, 'N m'],

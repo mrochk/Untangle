@@ -1,7 +1,7 @@
 import unittest
 import jax, jax.numpy as jnp
 
-from untangle.algorithm import decoupling_basic
+from untangle.algorithm import basic_decoupling
 from untangle.utils import get_random_key, collect_information
 from untangle.utils.testing import POLYNOMIAL_1, POLYNOMIAL_2
 
@@ -16,7 +16,7 @@ class TestDecouplingBasic(unittest.TestCase):
 
         X, Y, J = collect_information(f, N, n)
 
-        decoupling, _ = decoupling_basic(J, Y, X, rank)
+        decoupling, _ = basic_decoupling(J, Y, X, rank)
 
         x = jax.random.uniform(get_random_key(), shape=m)
         truth, decoupled = f(x), decoupling(x)
@@ -29,7 +29,7 @@ class TestDecouplingBasic(unittest.TestCase):
         N = 20
 
         X, Y, J = collect_information(f, N, m)
-        decoupling, _ = decoupling_basic(J, Y, X, rank)
+        decoupling, _ = basic_decoupling(J, Y, X, rank)
 
         x = jax.random.uniform(get_random_key(), shape=m)
         truth = f(x); decoupled = decoupling(x)
