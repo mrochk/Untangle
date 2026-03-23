@@ -35,7 +35,7 @@ def fit_internal_derivative(u_s, h_s, r_s):
     c0 = (r_s - g_bias(u_s)).mean()
     return lambda x: g_bias(x) + c0
 
-def fit_internals(U, H, R, use: str = 'R'):
+def fit_internals(U, H, R, use: str = 'H'):
     internals = []
 
     for rank in range(U.shape[1]):

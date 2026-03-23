@@ -62,3 +62,5 @@ def relative_error(
 ) -> Float[Array, '']:
     if weights is None: weights = jnp.ones(factors[0].shape[1])
     return jnp.linalg.norm(tensor - reconstruct_tensor(factors, weights)) / jnp.linalg.norm(tensor)
+
+#def outputs_error(f, learned, X):

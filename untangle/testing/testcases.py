@@ -81,7 +81,7 @@ POLYNOMIAL_5 = TestCase(polynomial5, 4, 3, 'polynomial5')
 def periodic1(u):
     u1, u2 = u
     return jnp.array([
-        jnp.cos(4 * jnp.pi * u1) + u2**2 * 0.5 - 1,
+        1000*jnp.cos(4 * jnp.pi * u1) + u2**2 * 0.5 - 1,
         jnp.sin(4 * jnp.pi * u2) + u1**3 * 0.5 + 1,
     ])
  
@@ -170,8 +170,8 @@ def nonlinear4(u):
     u1, u2, u3 = u
     s = jnp.exp(u1) + jnp.exp(u2) + jnp.exp(u3)
     return jnp.array([
-        jnp.exp(u1) / s - u2 * u3,
-        jnp.exp(u2) / s + u1**2 - 0.5,
+        100*jnp.exp(u1) / s - u2 * u3,
+        0.01*jnp.exp(u2) / s + u1**2 - 0.5,
         jnp.exp(u3) / s - u1 * u2 + u3,
         u1**3 + u2**3 + u3**3 - 1,
     ])
