@@ -2,8 +2,8 @@ import jax, jax.numpy as jnp
 
 from untangle.utils import collect_information, get_random_key
 from untangle.algorithm import basic_decoupling
-from untangle.utils.testing import *
-from untangle.scaler import MaxScaler, StdScaler
+from untangle.testing import *
+from untangle.scaler import MaxFunctionScaler, StdFunctionScaler
 
 import matplotlib.pyplot as plt
 

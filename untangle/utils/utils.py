@@ -8,14 +8,13 @@ from beartype import beartype
 
 def make_log(verbose: int, prefix: str = '') -> Callable[[], None]:
     def log(*args):
-        if verbose > 0:
-            print(prefix, end='')
-            print(*args, flush=True)
+        if verbose <= 0: return
+        print(prefix, end='')
+        print(*args, flush=True)
     return log
 
 def get_random_key() -> Array:
-    random_int = random.randint(0, 10_000)
-    return jax.random.key(random_int)
+    return jax.random.key(random.randint(0, int(1e6)))
 
 @jaxtyped(typechecker=beartype)
 def collect_information(

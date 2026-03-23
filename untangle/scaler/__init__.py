@@ -1,1 +1,5 @@
-from .scaler import MaxScaler, StdScaler
+from .scaler import (
+    TensorScaler,
+    MaxFunctionScaler, 
+    StdFunctionScaler,
+)
