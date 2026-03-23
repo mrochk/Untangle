@@ -1,6 +1,5 @@
-import random
 import jax, jax.numpy as jnp
-from functools import partial
+import random
 
 from jaxtyping import jaxtyped, Float, Array
 from beartype.typing import Callable, Tuple, Optional

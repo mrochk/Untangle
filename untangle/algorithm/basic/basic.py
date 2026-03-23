@@ -7,13 +7,14 @@ from jaxtyping import jaxtyped, Array, Float
 from untangle.algorithm import Decoupling
 from untangle.decomposition import run_many_cpd
 from untangle.ops import vandermonde_diag, block_diag
-from untangle.algorithm.common import make_log, make_polynomials
+from untangle.algorithm.common import make_polynomials
+from untangle.utils import make_log
 
 @jaxtyped(typechecker=beartype)
 def basic_decoupling(
-    J: Float[Array, 'n m N'], 
-    Y: Float[Array, 'N n'], 
     X: Float[Array, 'N m'], 
+    Y: Float[Array, 'N n'], 
+    J: Float[Array, 'n m N'], 
     rank: int,
     degree: int = 3,
     n_init: int = mp.cpu_count(),

@@ -12,9 +12,9 @@ from untangle.algorithm.common import make_polynomials
 
 @jaxtyped(typechecker=beartype)
 def basic_decoupling_constrained(
-    J: Float[Array, 'n m N'], 
-    Y: Float[Array, 'N n'], 
     X: Float[Array, 'N m'], 
+    Y: Float[Array, 'N n'], 
+    J: Float[Array, 'n m N'], 
     rank: int,
     degree: int = 3,
     n_init: int = mp.cpu_count(),

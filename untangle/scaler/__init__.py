@@ -1,5 +1,5 @@
 from .scaler import (
-    TensorScaler,
+    scale_tensor,
     MaxFunctionScaler, 
     StdFunctionScaler,
 )

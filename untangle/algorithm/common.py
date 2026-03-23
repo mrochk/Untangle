@@ -6,15 +6,6 @@ from jaxtyping import jaxtyped, Float, Array
 from beartype import beartype
 from beartype.typing import Callable
 
-from untangle.utils import make_polynomials
-
-def inference_polynomial(
-    W: Float[Array, 'n r'], 
-    V: Float[Array, 'm r'], 
-    coefs: Float[Array, 'r d'],
-) -> Callable:
-    return lambda x: W @ make_polynomials(coefs)(V.T @ x)
-
 def make_internals(internals):
     return lambda u: jnp.array([gi(ui) for gi, ui in zip(internals, u)])
 
@@ -70,10 +61,14 @@ def initialize(tensor: Float[Array, 'n m N'], rank: int, key: Array, with_R: boo
     V = jax.random.normal(keys[1], shape=(m, rank))
     H = jax.random.normal(keys[2], shape=(N, rank))
 
-    if with_R:
-        R = jax.random.normal(keys[3], shape=(N, rank))
-        return W, V, H, R
-    else: return W, V, H
+    if not with_R: return (W, V, H)
+
+    R = jax.random.normal(keys[3], shape=(N, rank))
+    return (W, V, H, R)
+
+@jax.jit
+def lstsq(X, Y):
+    return jnp.linalg.lstsq(X, Y)[0].T
 
 @jax.jit
 @jaxtyped(typechecker=beartype)

@@ -5,60 +5,47 @@ from tqdm import tqdm
 from jaxtyping import jaxtyped, Float, Array
 from beartype import beartype
 
+from untangle.algorithm import Decoupling
 from untangle.ops import unfold_kolda, khatri_rao
 from untangle.utils import get_random_key, relative_error, make_log
-from untangle.algorithm.common import normalize_columns_V, fit_internals, make_internals, inference
 from scipy.interpolate import make_smoothing_spline
-
-@jaxtyped(typechecker=beartype)
-def init_cmtf(tensor: Float[Array, 'n m N'], rank: int, key: Array):
-    n, m, N = tensor.shape
-    keys = jax.random.split(key, num=4)
-
-    W = jax.random.normal(keys[0], shape=(n, rank))
-    V = jax.random.normal(keys[1], shape=(m, rank))
-    H = jax.random.normal(keys[2], shape=(N, rank))
-    R = jax.random.normal(keys[3], shape=(N, rank))
-
-    return W, V, H, R
-
-@jaxtyped(typechecker=beartype)
-def cmtf_lstsq(X1, X2, Y1, Y2, lam):
-    X = jnp.concatenate([X1, lam*X2], axis=0)
-    Y = jnp.concatenate([Y1, lam*Y2], axis=0)
-    return jnp.linalg.lstsq(X, Y)[0].T
+from untangle.algorithm.common import (
+    normalize_columns_V, 
+    fit_internals, 
+    lstsq,
+    cmtf_lstsq,
+    initialize,
+    make_internals, 
+)
 
 @jaxtyped(typechecker=beartype)
 def cmtf_bsd(
-    J: Float[Array, 'n m N'],
-    Y: Float[Array, 'N n'],
     X: Float[Array, 'N m'],
+    Y: Float[Array, 'N n'],
+    J: Float[Array, 'n m N'],
     rank: int,
-    lambda_min: float = 0.0,
-    lambda_max: float = 0.1,
-    degree: int = 3,
+    lam: float = 0.1,
+    iterations: int = 50,
     dof: int = 12,
-    iterations: int = 20,
-    random_state: Array = get_random_key(),
+    degree: int = 3,
+    key: Array = get_random_key(),
     verbose: int = 0,
-):
-    log = make_log(verbose, '|CMTF-BSD| -> ')
+) -> Decoupling:
+
+    name = 'CMTF-BSD'
+
+    log = make_log(verbose, f'|{name}| -> ')
     best_errors = []
 
-    W, V, H, R = init_cmtf(J, rank, random_state)
+    W, V, H, R = initialize(J, rank, key, True)
 
-    lstsq = jax.jit(jnp.linalg.lstsq)
-
-    lambdas = jnp.linspace(lambda_min, lambda_max, iterations)
-
-    for iteration in tqdm(range(iterations), desc='Computing CMTF-BSD'):
-        lam = lambdas[iteration]
+    for iteration in tqdm(range(iterations), desc=f'Computing {name}'):
         W = cmtf_lstsq(X1=khatri_rao(H, V), X2=R, Y1=unfold_kolda(J, 0).T, Y2=Y, lam=lam)
-        V = lstsq(khatri_rao(H, W), unfold_kolda(J, 1).T)[0].T
+        V = lstsq(khatri_rao(H, W), unfold_kolda(J, 1).T)
         W, V = normalize_columns_V(W, V)
 
-        H = lstsq(khatri_rao(V, W), unfold_kolda(J, 2).T)[0].T
-        R = lstsq(W, Y.T)[0].T
+        H = lstsq(khatri_rao(V, W), unfold_kolda(J, 2).T)
+        R = lstsq(W, Y.T)
 
         H, R = bsplines_projection(H, R, X @ V, dof, degree, lam)
 
@@ -74,8 +61,9 @@ def cmtf_bsd(
     log(f'Returning best result with error = {best_error:.4f}')
 
     W, V, H, R = best
-    g = make_internals(fit_internals(X @ V, H, R, use='H'))
-    return inference(W, V, g), best, jnp.array(best_errors)
+    internals = make_internals(fit_internals(X @ V, H, R, use='H'))
+
+    return Decoupling(best, internals)
 
 @jax.jit
 def project(j, c, B, dB, H, R):

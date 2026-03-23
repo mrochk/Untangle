@@ -37,17 +37,15 @@ class StdFunctionScaler(FunctionScaler):
     def unscale(self, f_scaled: Callable) -> Callable:
         return lambda x: f_scaled(x) * self.stdevs
 
-class TensorScaler:
-    def __init__(self, tensor):
-        n, m, N = tensor.shape
-        self.factors = jnp.sqrt(m*N) / jnp.linalg.norm(tensor.reshape(-1), axis=1)
-        self.tensor = tensor
+def scale_tensor(J, Y = None):
+    n, m, N = J.shape
 
-    def scale(self, tensor = None): 
-        if tensor is not None:
-            return tensor * self.factors[:, None, None]
-        return self.tensor * self.factors[:, None, None]
+    factors = jnp.sqrt(m*N) / jnp.linalg.norm(J.reshape(n, -1), axis=1)
 
-    def unscale(self, scaled_tensor): 
-        return scaled_tensor / self.factors[:, None, None]
- 
+    J_scaled = J * factors[:, None, None]
+
+    if Y is not None:
+        Y_scaled = Y * factors[None, :]
+        return factors, J_scaled, Y_scaled
+
+    return factors, J_scaled
