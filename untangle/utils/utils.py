@@ -38,13 +38,6 @@ def collect_information(
 
     return (X, Y, J)
 
-def make_polynomial(coefs: Float[Array, 'd']) -> Callable:
-    return partial(jnp.polyval, jnp.flip(coefs))
-
-def make_polynomials(coefs: Float[Array, 'n d']) -> Callable:
-    polynomials = [make_polynomial(c) for c in coefs]
-    return (lambda x: jnp.array([f(xi) for f, xi in zip(polynomials, x)]))
-
 @jax.jit
 def reconstruct_tensor(
     factors: Tuple[Float[Array, 'n r'], Float[Array, 'm r'], Float[Array, 'N r']],

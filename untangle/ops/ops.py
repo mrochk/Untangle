@@ -43,3 +43,6 @@ def vandermonde_vector(x: float, d: int):
 
 def vandermonde_matrix(values: Iterable[float], degree: int):
     return jnp.vstack([vandermonde_vector(v, degree) for v in values])
+
+def vandermonde_diag(X, d: int):
+    return block_diag([vandermonde_vector(x, d) for x in X])

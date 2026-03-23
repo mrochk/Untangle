@@ -1,19 +1,17 @@
-'''Implementation of the algorithm with polynomial constraints as described in Gabriel Hollander's PhD thesis.'''
-
 import jax, jax.numpy as jnp
 import multiprocessing as mp
 from numpy.polynomial import Polynomial
 
 from beartype import beartype
-from beartype.typing import Tuple, Callable
 from jaxtyping import jaxtyped, Array, Float
 
-from untangle.decomposition import run_many_cpd_constrained
-from untangle.algorithm.common import inference_polynomial
 from untangle.utils import make_log
+from untangle.algorithm import Decoupling
+from untangle.decomposition import run_many_cpd_constrained
+from untangle.algorithm.common import make_polynomials
 
 @jaxtyped(typechecker=beartype)
-def decoupling_basic_constrained(
+def basic_decoupling_constrained(
     J: Float[Array, 'n m N'], 
     Y: Float[Array, 'N n'], 
     X: Float[Array, 'N m'], 
@@ -21,28 +19,10 @@ def decoupling_basic_constrained(
     degree: int = 3,
     n_init: int = mp.cpu_count(),
     verbose: int = 0,
-) -> Tuple[
-    Callable,
-    Tuple[Float[Array, 'n r'], Float[Array, 'm r'], Float[Array, 'd r']],
-]:
-    '''Basic decoupling with additional polynomial constraints on 3rd factor.
-
-    Args description (below) assumes the initial function takes m inputs and returns n outputs.
-
-    Args:
-        X: Operating points, of shape (N, m).
-        Y: Function outputs for X, of shape (N, n).
-        J: Stacked jacobian of shape (n, m, N).
-        rank: Rank of the CPD.
-        degree: Degree of internal polynomials. Defaults to 3.
-        n_init: Number of (parallel) decompositions to run. The best is kept and used for decoupling.
-        verbose: Verbose output from 0 to 2. Defaults to 0.
-
-    Returns (f, (W, V, coefs)), where f is the callable decoupling, and (W, V, coefs) are the components.
-    '''    
+) -> Decoupling:
     
-    log = make_log(verbose, '<basic-constrained>: ')
-    log(f'Computing CP decomposition with polynomial constraint of J with rank {rank} and {n_init} (parallel) inits...')
+    log = make_log(verbose, '|BASIC-CONSTRAINED| -> ')
+    log(f'Computing CP decomposition with polynomial constraint of J with rank {rank} and {n_init} inits...')
 
     factors, dcoefs = run_many_cpd_constrained(J, X, rank, degree, verbose=verbose)
     W, V, H = factors
@@ -52,9 +32,11 @@ def decoupling_basic_constrained(
     log('Recovering internals by integrating...')
     coefs = integrate(dcoefs, Z, Y, W)
 
-    return inference_polynomial(W, V, coefs.T), factors
+    internals = make_polynomials(coefs)
 
-def integrate(dcoefs, Z, y, W):
+    return Decoupling(factors, internals)
+
+def integrate(dcoefs, Z, Y, W):
     assert dcoefs.shape[1] == W.shape[1]
 
     degree, rank = dcoefs.shape
@@ -72,10 +54,7 @@ def integrate(dcoefs, Z, y, W):
     # n = n outputs of initial func
 
     N = Z.shape[0]
-    try:
-        n = y.shape[1]
-    except:
-        n = 1
+    n = Y.shape[1]
 
     columns_W = jnp.zeros((N * n, rank))
     residuals = jnp.zeros(N * n)
@@ -91,7 +70,7 @@ def integrate(dcoefs, Z, y, W):
             # we are looking for constants that minimize the residual
             # between the y and the values we get when using the polynomials
             # without constant terms
-            residuals = residuals.at[row_idx].set(y[i, j] - y_pred[j])
+            residuals = residuals.at[row_idx].set(Y[i, j] - y_pred[j])
 
             # design matrix of our least-squares problem
             # it contains the corresponding column of W for each output

@@ -1,4 +1,5 @@
 import jax, jax.numpy as jnp
+from functools import partial
 from scipy.interpolate import make_smoothing_spline
 
 from jaxtyping import jaxtyped, Float, Array
@@ -80,3 +81,10 @@ def cmtf_lstsq(X1, X2, Y1, Y2, lam):
     X = jnp.concatenate([X1, lam*X2], axis=0)
     Y = jnp.concatenate([Y1, lam*Y2], axis=0)
     return jnp.linalg.lstsq(X, Y)[0].T
+
+def make_polynomial(coefs: Float[Array, 'd']) -> Callable:
+    return partial(jnp.polyval, jnp.flip(coefs))
+
+def make_polynomials(coefs: Float[Array, 'n d']) -> Callable:
+    polynomials = [make_polynomial(c) for c in coefs]
+    return (lambda x: jnp.array([f(xi) for f, xi in zip(polynomials, x)]))
