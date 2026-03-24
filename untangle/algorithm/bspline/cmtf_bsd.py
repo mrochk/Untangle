@@ -8,7 +8,6 @@ from beartype import beartype
 from untangle.algorithm import Decoupling
 from untangle.ops import unfold_kolda, khatri_rao
 from untangle.utils import get_random_key, relative_error, make_log
-from scipy.interpolate import make_smoothing_spline
 from untangle.algorithm.common import (
     normalize_columns_V, 
     fit_internals, 
@@ -79,30 +78,18 @@ def bsplines_projection(
     degree: int,
     lam: float,
 ):
-    smooth = True
-
     for rank in range(H.shape[1]):
         u, h, r = U[:, rank], H[:, rank], R[:, rank]
 
-        if smooth:
-            idx = jnp.argsort(u)
-            inv = jnp.argsort(idx)
-            us = u[idx]
-            hs = h[idx]
-            rs = r[idx]
-
-            dss = make_smoothing_spline(us, hs)
-            ss = make_smoothing_spline(us, rs)
-            h_smooth = dss(us)[inv]
-            r_smooth = ss(us)[inv]
-
         knots = determine_knots(u, dof, degree)
 
-        B = design_matrix(u, knots, degree)
-        dB = design_dmatrix(u, knots, degree)
+        try:
+            B = design_matrix(u, knots, degree)
+            dB = design_dmatrix(u, knots, degree)
+        except ValueError as e:
+            continue
 
-        if smooth: c = cmtf_lstsq(X1=dB, Y1=h_smooth, X2=B, Y2=r_smooth, lam=lam)
-        else: c = cmtf_lstsq(X1=dB, Y1=h, X2=B, Y2=r, lam=lam)
+        c = cmtf_lstsq(X1=dB, Y1=h, X2=B, Y2=r, lam=lam)
 
         H, R = project(rank, c, B, dB, H, R)
 

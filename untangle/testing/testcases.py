@@ -21,8 +21,8 @@ class TestCase:
 def polynomial1(u):
     u1, u2, u3 = u
     return jnp.array([
-        -4 * u1**2 + 8 * u1 * u3 + 6 * u1 - 3 * u3**2 - 8 * u3 - 6,
-        2 * u1**2 - 4 * u1 * u3 - 3 * u1 + u2**3 + 6 * u2**2 * u3 + 12 * u2 * u3**2 - u2 + 8 * u3**3 + 2 * u3**2 + u3 + 3,
+        -40000 * u1**2 + 8 * u1 * u3 + 6 * u1 - 3 * u3**2 - 8 * u3 - 6,
+        0.2 * u1**2 - 4 * u1 * u3 - 3 * u1 + u2**3 + 6 * u2**2 * u3 + 12 * u2 * u3**2 - u2 + 8 * u3**3 + 2 * u3**2 + u3 + 3,
         -2 * u1**2 + 4 * u1 * u3 + 4 * u1 - 2 * u3**2 - 3 * u3 - u2 - 8,
     ])
  
@@ -79,13 +79,12 @@ def polynomial5(u):
 POLYNOMIAL_5 = TestCase(polynomial5, 4, 3, 'polynomial5')
  
 def periodic1(u):
-    u1, u2 = u
     return jnp.array([
-        1000*jnp.cos(4 * jnp.pi * u1) + u2**2 * 0.5 - 1,
-        jnp.sin(4 * jnp.pi * u2) + u1**3 * 0.5 + 1,
+        jnp.cos(4 * jnp.pi * u),
+        -jnp.sin(3 * jnp.pi * u),
     ])
  
-PERIODIC_1 = TestCase(periodic1, 2, 2, 'periodic1', 3)
+PERIODIC_1 = TestCase(periodic1, 1, 2, 'periodic1', 3)
  
 def periodic2(u):
     u1, u2, u3, u4 = u

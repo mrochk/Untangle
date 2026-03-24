@@ -1,6 +1,6 @@
 import jax, jax.numpy as jnp
 from functools import partial
-from scipy.interpolate import make_smoothing_spline
+from scipy.interpolate import make_smoothing_spline, make_interp_spline
 
 from jaxtyping import jaxtyped, Float, Array
 from beartype import beartype
@@ -26,14 +26,27 @@ def normalize_columns_V(W: Float[Array, 'n r'], V: Float[Array, 'm r']):
 
     return jax.lax.fori_loop(0, rank, _, (W, V))
 
+def prepare_spline_inputs(u_s, *ys):
+    u_unique, inverse = jnp.unique(u_s, return_inverse=True)
+    ys_unique = [jnp.array([y[inverse == i].mean() for i in range(len(u_unique))]) for y in ys]
+    return (u_unique, *ys_unique)
+
+def safe_smoothing_spline(u_s, y_s):
+    try: return make_smoothing_spline(u_s, y_s)[0]
+    except ValueError:
+        # Fallback: linear spline (always well-posed)
+        return make_interp_spline(u_s, y_s, k=1)
+
 def fit_internal(u_s, r_s):
-    return make_smoothing_spline(u_s, r_s)
+    u_s, r_s = prepare_spline_inputs(u_s, r_s)
+    return safe_smoothing_spline(u_s, r_s)
 
 def fit_internal_derivative(u_s, h_s, r_s):
-    dg = make_smoothing_spline(u_s, h_s)
+    u_s, h_s, r_s = prepare_spline_inputs(u_s, h_s, r_s)
+    dg = safe_smoothing_spline(u_s, h_s)
     g_bias = dg.antiderivative()
-    c0 = (r_s - g_bias(u_s)).mean()
-    return lambda x: g_bias(x) + c0
+    bias = jnp.median(r_s - g_bias(u_s))
+    return lambda x: g_bias(x) + bias
 
 def fit_internals(U, H, R, use: str = 'H'):
     internals = []

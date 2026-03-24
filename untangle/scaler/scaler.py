@@ -23,7 +23,7 @@ class MaxFunctionScaler(FunctionScaler):
     def scale(self) -> Callable:
         return lambda x: self.function(x) / self.maximums
 
-    def unscaled(self, f_scaled: Callable) -> Callable:
+    def unscale(self, f_scaled: Callable) -> Callable:
         return lambda x: f_scaled(x) * self.maximums
 
 class StdFunctionScaler(FunctionScaler):
@@ -48,4 +48,4 @@ def scale_tensor(J, Y = None):
         Y_scaled = Y * factors[None, :]
         return factors, J_scaled, Y_scaled
 
-    return factors, J_scaled
+    return factors, J_scaled 
