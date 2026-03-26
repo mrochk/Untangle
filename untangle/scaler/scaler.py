@@ -46,11 +46,11 @@ class JacobianScaler:
 
     @jaxtyped(typechecker=beartype)
     def scale(self) -> Tuple[Float[Array, 'n m N'], Float[Array, 'N n']]:
-        J_scaled = self.J * self.factors[None, :]
+        J_scaled = self.J * self.factors[:, None, None]
         Y_scaled = self.Y * self.factors[None, :]
         return J_scaled, Y_scaled
 
     @jaxtyped(typechecker=beartype)
-    def unscaled(self, f_scaled: Callable) -> Callable:
-        def f_unscaled(x): return f_scaled(x) * self.factors
+    def unscale(self, f_scaled: Callable) -> Callable:
+        def f_unscaled(x): return f_scaled(x) / self.factors
         return f_unscaled

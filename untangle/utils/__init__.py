@@ -1,7 +1,8 @@
 from .utils import (
-    make_log,
-    get_random_key,
     collect_information,
     reconstruct_tensor,
+    get_random_key,
+    function_error,
     cpd_error,
+    make_log,
 )

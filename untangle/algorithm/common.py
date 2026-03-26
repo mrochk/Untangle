@@ -32,7 +32,7 @@ def prepare_spline_inputs(u_s, *ys):
     return (u_unique, *ys_unique)
 
 def safe_smoothing_spline(u_s, y_s):
-    try: return make_smoothing_spline(u_s, y_s)[0]
+    try: return make_smoothing_spline(u_s, y_s)
     except ValueError:
         # Fallback: linear spline (always well-posed)
         return make_interp_spline(u_s, y_s, k=1)

@@ -1,5 +1,4 @@
-import jax, jax.numpy as jnp
-import random
+import random, jax, jax.numpy as jnp
 
 from jaxtyping import jaxtyped, Float, Array, ArrayLike
 from beartype.typing import Callable, Tuple, Optional
@@ -12,8 +11,7 @@ def make_log(verbose: int, prefix: str = '') -> Callable[[], None]:
         print(*args, flush=True)
     return log
 
-def get_random_key() -> Array:
-    return jax.random.key(random.randint(0, int(1e10)))
+def get_random_key() -> Array: return jax.random.key(random.randint(0, int(1e10)))
 
 @jaxtyped(typechecker=beartype)
 def collect_information(
@@ -71,6 +69,7 @@ def reconstruct_tensor(
     return tensor
 
 @jax.jit
+@jaxtyped(typechecker=beartype)
 def cpd_error(
 
     tensor: Float[Array, 'n m N'],
@@ -83,7 +82,7 @@ def cpd_error(
 
     return jnp.linalg.norm(tensor - _tensor) / jnp.linalg.norm(tensor)
 
-def outputs_error(f: Callable, learned: Callable, X: ArrayLike):
+def function_error(f: Callable, learned: Callable, X: ArrayLike):
     Y = jnp.array([f(x) for x in X])
     Y_learned = jnp.array([learned(x) for x in X])
 
