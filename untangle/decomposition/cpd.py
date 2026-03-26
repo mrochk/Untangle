@@ -5,7 +5,7 @@ from jaxtyping import jaxtyped, Array, Float
 from beartype import beartype 
 from beartype.typing import Tuple, Optional 
 
-from untangle.utils import relative_error, get_random_key
+from untangle.utils import cpd_error, get_random_key
 from untangle.ops import unfold_kolda
 from .common import init_cpd, solve_subproblem, column_normalize
 
@@ -43,7 +43,7 @@ def cpd(
         H, weights = column_normalize(solve_subproblem_H(W=W, V=V, H=H))
 
         factors = W, V, H
-        error = relative_error(tensor, factors, weights)
+        error = cpd_error(tensor, factors, weights)
 
         if iteration > 0:
             diff = abs(error - errors[-1])

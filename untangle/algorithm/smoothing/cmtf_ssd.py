@@ -6,7 +6,7 @@ from beartype import beartype
 
 from untangle.algorithm import Decoupling
 from untangle.ops import unfold_kolda, khatri_rao
-from untangle.utils import get_random_key, relative_error, make_log
+from untangle.utils import get_random_key, cpd_error, make_log
 from untangle.algorithm.smoothing.projection import smoothing_splines_projection
 from untangle.algorithm.common import normalize_columns_V, fit_internals, cmtf_lstsq, lstsq, initialize, make_internals
     
@@ -46,7 +46,7 @@ def cmtf_ssd(
 
         H, R = smoothing_splines_projection(H, R, Z, lam, iteration+1)
 
-        error = relative_error(J, (W, V, H))
+        error = cpd_error(J, (W, V, H))
 
         if iteration == 0 or error < best_error:
             best_error = error

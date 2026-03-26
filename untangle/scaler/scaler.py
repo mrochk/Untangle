@@ -1,51 +1,56 @@
 import jax, jax.numpy as jnp
+
+from jaxtyping import jaxtyped, Float, Array
+from beartype.typing import Callable, Tuple
+from beartype import beartype
+
 from untangle.utils import get_random_key
 
-from jaxtyping import jaxtyped
-from beartype.typing import Callable
-
 class FunctionScaler:
-    def __init__(self, function: Callable, n_inputs: int, n_samples_estimate: int = 1_000):
-        assert callable(function)
-        self.function = function
-        inputs = jax.random.uniform(get_random_key(), shape=(n_samples_estimate, n_inputs))
-        self.outputs = jax.vmap(function)(inputs)
 
-    def scale(self) -> Callable: pass
+    @jaxtyped(typechecker=beartype)
+    def __init__(self, f: Callable, n_inputs: int, key: Array = None, scaler: str = 'max', N: int = 1_000):
 
-    def unscale(self, f_scaled: Callable) -> Callable: pass
+        assert callable(f)
+        self.f = f
 
-class MaxFunctionScaler(FunctionScaler):
-    def __init__(self, function: Callable, n_inputs: int, n_samples_estimate: int = 1000):
-        super().__init__(function, n_inputs, n_samples_estimate)
-        self.maximums = jnp.max(self.outputs, axis=0)
+        if key is None: key = get_random_key()
+        X = jax.random.uniform(key, shape=(N, n_inputs))
 
+        self.outputs = jax.vmap(f)(X)
+
+        match scaler:
+            case 'max': self.factors = 1 / jnp.max(self.outputs, axis=0)
+            case 'std': self.factors = 1 / jnp.std(self.outputs, axis=0)
+            case _: raise ValueError('only "max" and "std" scalers supported')
+
+    @jaxtyped(typechecker=beartype)
     def scale(self) -> Callable:
-        return lambda x: self.function(x) / self.maximums
+        def f_scaled(x): return self.f(x) * self.factors
+        return f_scaled
 
+    @jaxtyped(typechecker=beartype)
     def unscale(self, f_scaled: Callable) -> Callable:
-        return lambda x: f_scaled(x) * self.maximums
+        def f_unscaled(x): return f_scaled(x) / self.factors
+        return f_unscaled
 
-class StdFunctionScaler(FunctionScaler):
-    def __init__(self, function: Callable, n_inputs: int, n_samples_estimate: int = 1000):
-        super().__init__(function, n_inputs, n_samples_estimate)
-        self.stdevs = jnp.std(self.outputs, axis=0)
+class JacobianScaler:
 
-    def scale(self) -> Callable:
-        return lambda x: self.function(x) / self.stdevs
+    @jaxtyped(typechecker=beartype)
+    def __init__(self, J: Float[Array, 'n m N'], Y: Float[Array, 'N n']):
+        self.J = J
+        self.Y = Y
 
-    def unscale(self, f_scaled: Callable) -> Callable:
-        return lambda x: f_scaled(x) * self.stdevs
+        n, m, N = J.shape
+        self.factors = jnp.sqrt(m*N) / jnp.linalg.norm(J.reshape(n, -1), axis=1)
 
-def scale_tensor(J, Y = None):
-    n, m, N = J.shape
+    @jaxtyped(typechecker=beartype)
+    def scale(self) -> Tuple[Float[Array, 'n m N'], Float[Array, 'N n']]:
+        J_scaled = self.J * self.factors[None, :]
+        Y_scaled = self.Y * self.factors[None, :]
+        return J_scaled, Y_scaled
 
-    factors = jnp.sqrt(m*N) / jnp.linalg.norm(J.reshape(n, -1), axis=1)
-
-    J_scaled = J * factors[:, None, None]
-
-    if Y is not None:
-        Y_scaled = Y * factors[None, :]
-        return factors, J_scaled, Y_scaled
-
-    return factors, J_scaled 
+    @jaxtyped(typechecker=beartype)
+    def unscaled(self, f_scaled: Callable) -> Callable:
+        def f_unscaled(x): return f_scaled(x) * self.factors
+        return f_unscaled

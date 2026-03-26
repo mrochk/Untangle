@@ -5,7 +5,7 @@ from jaxtyping import jaxtyped, Array, Float
 from beartype import beartype 
 from beartype.typing import Tuple, Optional
 
-from untangle.utils import relative_error, get_random_key
+from untangle.utils import cpd_error, get_random_key
 from untangle.ops import unfold_kolda, khatri_rao, reshape, block_diag, vandermonde_matrix
 from untangle.decomposition.common import init_cpd, solve_subproblem
 from untangle.algorithm.common import normalize_columns_V
@@ -50,7 +50,7 @@ def cpd_constrained(
         )
         
         factors = W, V, H
-        error = relative_error(tensor, factors)
+        error = cpd_error(tensor, factors)
 
         if iteration > 0:
             diff = abs(error - errors[-1])

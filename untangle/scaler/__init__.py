@@ -1,5 +1,1 @@
-from .scaler import (
-    scale_tensor,
-    MaxFunctionScaler, 
-    StdFunctionScaler,
-)
+from .scaler import FunctionScaler, JacobianScaler
