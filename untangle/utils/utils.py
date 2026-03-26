@@ -32,8 +32,8 @@ def collect_information(
     lo, hi = range
     X = jax.random.uniform(key, shape=(N, m), minval=lo, maxval=hi)
 
-    Y = function(X).squeeze()
-    J = jacobian(X).squeeze(axis=-1).transpose((1, 2, 0))
+    Y = function(X)
+    J = jacobian(X).transpose((1, 2, 0))
 
     return (X, Y, J)
 
@@ -64,8 +64,8 @@ def relative_error(
     return jnp.linalg.norm(tensor - reconstruct_tensor(factors, weights)) / jnp.linalg.norm(tensor)
 
 def outputs_error(f, learned, X):
-    Y = jnp.array([f(x) for x in X]).squeeze()
-    Y_learned = jnp.array([learned(x) for x in X]).squeeze()
+    Y = jnp.array([f(x) for x in X])
+    Y_learned = jnp.array([learned(x) for x in X])
 
     top = jnp.sqrt(jnp.mean((Y - Y_learned)**2, axis=0))
     bot = jnp.sqrt(jnp.mean((Y - jnp.mean(Y, axis=0))**2, axis=0))

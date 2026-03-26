@@ -83,11 +83,8 @@ def bsplines_projection(
 
         knots = determine_knots(u, dof, degree)
 
-        try:
-            B = design_matrix(u, knots, degree)
-            dB = design_dmatrix(u, knots, degree)
-        except ValueError as e:
-            continue
+        B = design_matrix(u, knots, degree)
+        dB = design_dmatrix(u, knots, degree)
 
         c = cmtf_lstsq(X1=dB, Y1=h, X2=B, Y2=r, lam=lam)
 
