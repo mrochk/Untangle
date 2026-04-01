@@ -1,6 +1,6 @@
 import jax, jax.numpy as jnp
 from functools import partial
-from scipy.interpolate import make_smoothing_spline, make_interp_spline
+from scipy.interpolate import BSpline, make_interp_spline, make_smoothing_spline
 
 from jaxtyping import jaxtyped, Float, Array
 from beartype import beartype
@@ -8,9 +8,6 @@ from beartype.typing import Callable
 
 def make_internals(internals):
     return lambda u: jnp.array([gi(ui) for gi, ui in zip(internals, u)])
-
-def inference(W, V, g):
-    return lambda x: W @ g(V.T @ x)
 
 @jax.jit
 def normalize_columns_V(W: Float[Array, 'n r'], V: Float[Array, 'm r']):
@@ -26,40 +23,24 @@ def normalize_columns_V(W: Float[Array, 'n r'], V: Float[Array, 'm r']):
 
     return jax.lax.fori_loop(0, rank, _, (W, V))
 
-def prepare_spline_inputs(u_s, *ys):
-    u_unique, inverse = jnp.unique(u_s, return_inverse=True)
-    ys_unique = [jnp.array([y[inverse == i].mean() for i in range(len(u_unique))]) for y in ys]
-    return (u_unique, *ys_unique)
+def fit_internal(z_s, h_s, r_s):
+    dg: BSpline = make_smoothing_spline(z_s, h_s)
 
-def safe_smoothing_spline(u_s, y_s):
-    try: return make_smoothing_spline(u_s, y_s)
-    except ValueError:
-        # Fallback: linear spline (always well-posed)
-        return make_interp_spline(u_s, y_s, k=1)
+    g_bias: BSpline = dg.antiderivative()
+    bias = jnp.median(r_s - g_bias(z_s))
 
-def fit_internal(u_s, r_s):
-    u_s, r_s = prepare_spline_inputs(u_s, r_s)
-    return safe_smoothing_spline(u_s, r_s)
+    def g(x): return g_bias(x) + bias
+    return g
 
-def fit_internal_derivative(u_s, h_s, r_s):
-    u_s, h_s, r_s = prepare_spline_inputs(u_s, h_s, r_s)
-    dg = safe_smoothing_spline(u_s, h_s)
-    g_bias = dg.antiderivative()
-    bias = jnp.median(r_s - g_bias(u_s))
-    return lambda x: g_bias(x) + bias
-
-def fit_internals(U, H, R, use: str = 'H'):
+def fit_internals(Z, H, R):
     internals = []
 
-    for rank in range(U.shape[1]):
-        u, h, r = U[:, rank], H[:, rank], R[:, rank]
-        idx = jnp.argsort(u)
-        u_s, h_s, r_s = u[idx], h[idx], r[idx]
+    for rank in range(Z.shape[1]):
+        z, h, r = Z[:, rank], H[:, rank], R[:, rank]
+        idx = jnp.argsort(z)
+        z_s, h_s, r_s = z[idx], h[idx], r[idx]
 
-        match use:
-            case 'R': g = fit_internal(u_s, r_s)
-            case 'H': g = fit_internal_derivative(u_s, h_s, r_s)
-            case _: raise Exception()
+        g = fit_internal(z_s, h_s, r_s)
 
         internals.append(g)
 
@@ -80,8 +61,7 @@ def initialize(tensor: Float[Array, 'n m N'], rank: int, key: Array, with_R: boo
     return (W, V, H, R)
 
 @jax.jit
-def lstsq(X, Y):
-    return jnp.linalg.lstsq(X, Y)[0].T
+def lstsq(X, Y): return jnp.linalg.lstsq(X, Y)[0].T
 
 @jax.jit
 @jaxtyped(typechecker=beartype)

@@ -1,82 +1,119 @@
-import jax.numpy as jnp
-from scipy.interpolate import make_smoothing_spline, make_splrep
-from scipy.interpolate import BSpline
-from scipy.linalg import solve
-from scipy.optimize import minimize_scalar
 import numpy as np
-
+from scipy.optimize import minimize_scalar
+import jax, jax.numpy as jnp
 import matplotlib.pyplot as plt
 
-def smoothing_splines_projection(H, R, Z, gamma: float, iteration: int = 0):
-    fig, ax = plt.subplots(H.shape[1], 2, figsize=(10, 7))
+def _make_integration_matrix(z: np.ndarray) -> np.ndarray:
+    N = len(z)
+    U = np.zeros((N, N))
+    for i in range(1, N):
+        U[i] = U[i - 1]
+        delta = z[i] - z[i - 1]
+        U[i, i - 1] += delta / 2
+        U[i, i]     += delta / 2
+    return U
+
+def _make_penalty_matrix(z: np.ndarray) -> np.ndarray:
+    N = len(z)
+    h = np.diff(z)          # h[j] = z[j+1] - z[j],  shape (N-1,)
+    n = N - 2               # number of interior knots
+
+    # C ─ second-order divided differences
+    C = np.zeros((n, N))
+    for j in range(n):
+        C[j, j]   =  1.0 / h[j]
+        C[j, j+1] = -1.0 / h[j] - 1.0 / h[j+1]
+        C[j, j+2] =  1.0 / h[j+1]
+
+    # M ─ tridiagonal mass matrix
+    M = np.zeros((n, n))
+    for j in range(n):
+        M[j, j] = (h[j] + h[j+1]) / 3.0
+    for j in range(n - 1):
+        M[j,   j+1] = h[j+1] / 6.0
+        M[j+1, j  ] = h[j+1] / 6.0
+
+    K = C.T @ np.linalg.solve(M, C)
+    return K
+
+def find_lambda_gcv(z: np.ndarray, h: np.ndarray, r: np.ndarray, gamma: float) -> float:
+    U   = _make_integration_matrix(z)
+    K   = _make_penalty_matrix(z)
+    N   = len(h)
+    UtU = U.T @ U
+    rhs = h + gamma * (U.T @ r)
+
+    def gcv(log_lam: float) -> float:
+        lam   = np.exp(log_lam)
+        A     = np.eye(N) + gamma * UtU + lam * K
+
+        try:
+            f_hat  = np.linalg.solve(A, rhs)
+            AinvK  = np.linalg.solve(A, K)
+            tr_H   = N - lam * np.trace(AinvK)
+        except np.linalg.LinAlgError:
+            return np.inf
+
+        res_h   = h - f_hat
+        res_r   = r - U @ f_hat
+        rss     = np.sum(res_h ** 2) + gamma * np.sum(res_r ** 2)
+
+        n_total = 2 * N
+        denom   = n_total - tr_H
+        if denom <= 0:
+            return np.inf
+
+        return n_total * rss / denom ** 2
+
+    result = minimize_scalar(gcv, bounds=(-10, 10), method='bounded')
+    return float(np.exp(result.x))
+
+def make_combined_smoothing_spline(z, h, r, gamma, lam):
+    U = _make_integration_matrix(z)
+    K = _make_penalty_matrix(z)
+    N = len(h)
+
+    A     = np.eye(N) + gamma * (U.T @ U) + lam * K
+    f_hat = np.linalg.solve(A, h + gamma * U.T @ r)
+    r_hat = U @ f_hat
+
+    return f_hat, r_hat
+
+def smoothing_splines_projection(H, R, Z, gamma: float):
+    fig, ax = plt.subplots(H.shape[1], 2, figsize=(7, 7))
 
     for rank in range(H.shape[1]):
-        z = Z[:, rank]
-        h = H[:, rank]
-        r = R[:, rank]
+        z = np.array(Z[:, rank])
+        h = np.array(H[:, rank])
+        r = np.array(R[:, rank])
 
-        idx = jnp.argsort(z)
-        inv = jnp.argsort(idx)
+        idx = np.argsort(z)
+        inv = np.argsort(idx)
 
         z_sorted = z[idx]
         h_sorted = h[idx]
         r_sorted = r[idx]
 
-        #dss = make_splrep(z_sorted, h_sorted)
-        dss, lam = make_smoothing_spline(z_sorted, h_sorted)
+        lam = find_lambda_gcv(z_sorted, h_sorted, r_sorted, gamma)
+        print(lam)
+        dm, m = make_combined_smoothing_spline(z_sorted, h_sorted, r_sorted, gamma, lam)
 
-        dss, ss = make_combined_smoothing_spline(z_sorted, h_sorted, r_sorted, lam, gamma)
-        #ss = dss.antiderivative()
-        
-        dm = dss(z_sorted)
-        m = ss(z_sorted)
-        #m = m + jnp.median(r_sorted - m)
+        ax[rank, 0].scatter(z_sorted, h_sorted, color='red')
+        ax[rank, 0].scatter(z_sorted, r_sorted, color='green')
+
+        ax[rank, 1].scatter(z_sorted, h_sorted, color='red')
+        ax[rank, 1].scatter(z_sorted, r_sorted, color='green')
+
+        ax[rank, 1].scatter(z_sorted, dm, color='purple')
+        ax[rank, 1].scatter(z_sorted, m, color='purple')
 
         dm = dm[inv]
         m = m[inv]
 
-        H = H.at[:, rank].set(dm)
-        R = R.at[:, rank].set(m)
+        H = H.at[:, rank].set(jnp.array(dm))
+        R = R.at[:, rank].set(jnp.array(m))
 
-        ax[rank, 0].scatter(z, h, color='red')
-        ax[rank, 0].scatter(z, r, color='blue')
-        ax[rank, 1].plot(z_sorted, dm[idx], color='red')
-        ax[rank, 1].plot(z_sorted, m[idx], color='blue')
-        ax[rank, 1].plot(z_sorted, h_sorted, color='purple')
-        ax[rank, 1].plot(z_sorted, r_sorted, color='purple')
-        ax[rank, 1].scatter(z, dm, color='red')
-        ax[rank, 1].scatter(z, m, color='blue')
-
-    fig.tight_layout()
-    fig.savefig(f'plots/{iteration}.png')
-    plt.close(fig)
+    plt.savefig('plot.png')
+    plt.close()
 
     return H, R
-
-def make_combined_smoothing_spline(x, h, r, lam, gamma):
-    k = 3
-    t = np.concatenate([[x[0]] * (k + 1), x[1:-1], [x[-1]] * (k + 1)])
-    m = len(t) - k - 1
-
-    B = BSpline.design_matrix(x, t, k).toarray()
-
-    splines = [BSpline(t, np.eye(m)[j], k) for j in range(m)]
-    antiderivs = [s.antiderivative() for s in splines]
-    A = np.column_stack([np.ones(len(x))] + [a(x) - a(x[0]) for a in antiderivs])
-
-    x_q = np.linspace(x[0], x[-1], 10 * len(x))
-    D2 = np.column_stack([s.derivative(2)(x_q) for s in splines])
-    Omega_s = (x_q[1] - x_q[0]) * D2.T @ D2
-    Omega = np.block([[np.zeros((1, 1)), np.zeros((1, m))],
-                      [np.zeros((m, 1)), Omega_s]])
-
-    B_ext = np.column_stack([np.zeros(len(x)), B])
-    c = solve(gamma * A.T @ A + B_ext.T @ B_ext + lam * Omega,
-              gamma * A.T @ r + B_ext.T @ h,
-              assume_a='sym')
-
-    g_prime = BSpline(t, c[1:], k)
-    g_anti  = g_prime.antiderivative()
-    g       = lambda u: g_anti(u) - g_anti(x[0]) + c[0]
-
-    return g_prime, g

@@ -44,9 +44,13 @@ def cmtf_ssd(
 
         Z = X @ V
 
-        H, R = smoothing_splines_projection(H, R, Z, lam, iteration+1)
+        error_before = cpd_error(J, (W, V, H))
 
-        error = cpd_error(J, (W, V, H))
+        H, R = smoothing_splines_projection(H, R, Z, gamma=lam)
+
+        error = error_after = cpd_error(J, (W, V, H))
+
+        print(f'error before smoothing: {error_before:.4f}, after: {error_after:.4f}')
 
         if iteration == 0 or error < best_error:
             best_error = error
@@ -58,7 +62,8 @@ def cmtf_ssd(
     log(f'Returning best result with error = {best_error:.4f}')
 
     W, V, H, R = best
-    internals = make_internals(fit_internals(X @ V, H, R, use='H'))
+    Z = X @ V
+    internals = make_internals(fit_internals(Z, H, R))
 
     return Decoupling(best, internals)
     

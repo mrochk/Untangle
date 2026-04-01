@@ -60,7 +60,7 @@ def cmtf_bsd(
     log(f'Returning best result with error = {best_error:.4f}')
 
     W, V, H, R = best
-    internals = make_internals(fit_internals(X @ V, H, R, use='H'))
+    internals = make_internals(fit_internals(X @ V, H, R))
 
     return Decoupling(best, internals)
 
