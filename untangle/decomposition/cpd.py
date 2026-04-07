@@ -6,8 +6,8 @@ from beartype import beartype
 from beartype.typing import Tuple, Optional 
 
 from untangle.utils import cpd_error, get_random_key
-from untangle.ops import unfold_kolda
-from .common import init_cpd, solve_subproblem, column_normalize
+from untangle._ops import unfold_kolda
+from untangle._common import init_cpd, solve_subproblem, column_normalize
 
 @jaxtyped(typechecker=beartype)
 def cpd(

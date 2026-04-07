@@ -11,7 +11,7 @@ from untangle.decomposition import run_many_cpd_constrained
 from untangle.algorithm.common import make_polynomials
 
 @jaxtyped(typechecker=beartype)
-def basic_decoupling_constrained(
+def basic_constrained(
     X: Float[Array, 'N m'], 
     Y: Float[Array, 'N n'], 
     J: Float[Array, 'n m N'], 

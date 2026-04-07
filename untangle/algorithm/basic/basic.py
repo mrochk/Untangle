@@ -4,11 +4,11 @@ import multiprocessing as mp
 from beartype import beartype
 from jaxtyping import jaxtyped, Array, Float
 
+from untangle.utils import make_log
 from untangle.algorithm import Decoupling
 from untangle.decomposition import run_many_cpd
-from untangle.ops import vandermonde_diag, block_diag
-from untangle.algorithm.common import make_polynomials
-from untangle.utils import make_log
+from untangle._ops import vandermonde_diag, block_diag
+from untangle._common import make_polynomials
 
 @jaxtyped(typechecker=beartype)
 def basic_decoupling(

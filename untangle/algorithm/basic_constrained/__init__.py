@@ -1,1 +1,1 @@
-from .basic_constrained import basic_decoupling_constrained
+from .basic_constrained import basic_constrained

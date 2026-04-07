@@ -6,6 +6,10 @@ class Decoupling:
     internals: Callable
 
     def __init__(self, factors: tuple, internals: Callable):
+        assert len(factors) >= 3
+        assert callable(internals)
+        assert factors[0].shape[-1] == factors[1].shape[-1] == factors[2].shape[-1]
+
         self.factors = factors
         self.internals = internals
 

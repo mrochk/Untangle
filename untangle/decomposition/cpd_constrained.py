@@ -6,9 +6,8 @@ from beartype import beartype
 from beartype.typing import Tuple, Optional
 
 from untangle.utils import cpd_error, get_random_key
-from untangle.ops import unfold_kolda, khatri_rao, reshape, block_diag, vandermonde_matrix
-from untangle.decomposition.common import init_cpd, solve_subproblem
-from untangle.algorithm.common import normalize_columns_V
+from untangle._ops import unfold_kolda, khatri_rao, reshape, block_diag, vandermonde_matrix
+from untangle._common import init_cpd, solve_subproblem, normalize_columns_V
 
 @jaxtyped(typechecker=beartype)
 def cpd_constrained(
