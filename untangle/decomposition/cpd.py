@@ -7,7 +7,7 @@ from beartype.typing import Tuple, Optional
 
 from untangle.utils import cpd_error, get_random_key
 from untangle._ops import unfold_kolda
-from untangle._common import init_cpd, solve_subproblem, column_normalize
+from untangle._common import init_cpd, solve_subproblem, normalize_columns_simple
 
 @jaxtyped(typechecker=beartype)
 def cpd(
@@ -38,9 +38,9 @@ def cpd(
     solve_subproblem_H = partial(solve_subproblem, unfolded=unfold_kolda(tensor, 2), mode=2)
 
     for iteration in range(max_iters):
-        W, _ = column_normalize(solve_subproblem_W(W=W, V=V, H=H))
-        V, _ = column_normalize(solve_subproblem_V(W=W, V=V, H=H))
-        H, weights = column_normalize(solve_subproblem_H(W=W, V=V, H=H))
+        W, _ = normalize_columns_simple(solve_subproblem_W(W=W, V=V, H=H))
+        V, _ = normalize_columns_simple(solve_subproblem_V(W=W, V=V, H=H))
+        H, weights = normalize_columns_simple(solve_subproblem_H(W=W, V=V, H=H))
 
         factors = W, V, H
         error = cpd_error(tensor, factors, weights)

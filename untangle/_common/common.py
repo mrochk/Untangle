@@ -1,22 +1,40 @@
+import random
 import jax, jax.numpy as jnp
-from functools import partial
-from scipy.interpolate import BSpline, make_smoothing_spline
-
 from jaxtyping import jaxtyped, Array, Float
+from scipy.interpolate import BSpline, make_smoothing_spline
+from functools import partial
 from beartype import beartype 
-from beartype.typing import Tuple, Callable 
+from beartype.typing import Callable 
 
-from untangle._ops import khatri_rao
+from untangle import _ops as ops
+
+def make_log(verbose: int, prefix: str = '') -> Callable[[], None]:
+    def log(*args):
+        if verbose <= 0: return
+        print(prefix, end='')
+        print(*args, flush=True)
+    return log
+
+def get_random_key() -> Array:
+    return jax.random.key(random.randint(0, int(1e10)))
+
+### factors initialization
 
 @jaxtyped(typechecker=beartype)
-def init_cpd(tensor: Float[Array, 'n m N'], rank: int, key: Array):
+def initialize(tensor: Float[Array, 'n m N'], rank: int, key: Array, with_R: bool = False):
     n, m, N = tensor.shape
+    keys = jax.random.split(key, num=4)
 
-    W = jax.random.normal(key, shape=(n, rank))
-    V = jax.random.normal(key, shape=(m, rank))
-    H = jax.random.normal(key, shape=(N, rank))
+    W = jax.random.normal(keys[0], shape=(n, rank))
+    V = jax.random.normal(keys[1], shape=(m, rank))
+    H = jax.random.normal(keys[2], shape=(N, rank))
 
-    return W, V, H
+    if not with_R: return (W, V, H)
+
+    R = jax.random.normal(keys[3], shape=(N, rank))
+    return (W, V, H, R)
+
+### CP decomposition
 
 @jax.jit(static_argnames=('mode',))
 @jaxtyped(typechecker=beartype)
@@ -31,53 +49,34 @@ def solve_subproblem(
 
     match mode:
         case 0:
-            KR = khatri_rao(H, V)
+            KR = ops.khatri_rao(H, V)
             CC = H.T @ H
             BB = V.T @ V
             return unfolded @ KR @ jnp.linalg.pinv(CC * BB)
 
         case 1:
-            KR = khatri_rao(H, W)
+            KR = ops.khatri_rao(H, W)
             CC = H.T @ H
             AA = W.T @ W
             return unfolded @ KR @ jnp.linalg.pinv(CC * AA)
 
         case 2:
-            KR = khatri_rao(V, W)
+            KR = ops.khatri_rao(V, W)
             BB = V.T @ V
             AA = W.T @ W
             return unfolded @ KR @ jnp.linalg.pinv(BB * AA)
 
-@jax.jit
-def column_normalize(factor: Float[Array, '_ r']) -> Tuple[Float[Array, '_ r'], Float[Array, 'r']]:
-    rank = factor.shape[1]; weights = []
+### stuff related to fitting internals
 
-    for r in range(rank):
-        column = factor[:, r]
-        norm = jnp.linalg.norm(column)
-        weights.append(norm)
-        factor = factor.at[:, r].set(column / norm)
+def make_polynomial(coefs: Float[Array, 'd']) -> Callable:
+    return partial(jnp.polyval, jnp.flip(coefs))
 
-    return factor, jnp.array(weights)
-
-
+def make_polynomials(coefs: Float[Array, 'n d']) -> Callable:
+    polynomials = [make_polynomial(c) for c in coefs]
+    return (lambda x: jnp.array([f(xi) for f, xi in zip(polynomials, x)]))
 
 def make_internals(internals):
     return lambda u: jnp.array([gi(ui) for gi, ui in zip(internals, u)])
-
-@jax.jit
-def normalize_columns_V(W: Float[Array, 'n r'], V: Float[Array, 'm r']):
-    rank = W.shape[1]
-
-    def _(i, W_V):
-        W, V = W_V
-        colV, colW = V[:, i], W[:, i]
-        norm = jnp.linalg.norm(colV) + 1e-12
-        V = V.at[:, i].set(colV / norm)
-        W = W.at[:, i].set(colW * norm)
-        return W, V
-
-    return jax.lax.fori_loop(0, rank, _, (W, V))
 
 def fit_internal(z_s, h_s, r_s):
     dg: BSpline = make_smoothing_spline(z_s, h_s)
@@ -101,34 +100,3 @@ def fit_internals(Z, H, R):
         internals.append(g)
 
     return internals
-
-@jaxtyped(typechecker=beartype)
-def initialize(tensor: Float[Array, 'n m N'], rank: int, key: Array, with_R: bool = False):
-    n, m, N = tensor.shape
-    keys = jax.random.split(key, num=4)
-
-    W = jax.random.normal(keys[0], shape=(n, rank))
-    V = jax.random.normal(keys[1], shape=(m, rank))
-    H = jax.random.normal(keys[2], shape=(N, rank))
-
-    if not with_R: return (W, V, H)
-
-    R = jax.random.normal(keys[3], shape=(N, rank))
-    return (W, V, H, R)
-
-@jax.jit
-def lstsq(X, Y): return jnp.linalg.lstsq(X, Y)[0].T
-
-@jax.jit
-@jaxtyped(typechecker=beartype)
-def cmtf_lstsq(X1, X2, Y1, Y2, lam):
-    X = jnp.concatenate([X1, lam*X2], axis=0)
-    Y = jnp.concatenate([Y1, lam*Y2], axis=0)
-    return jnp.linalg.lstsq(X, Y)[0].T
-
-def make_polynomial(coefs: Float[Array, 'd']) -> Callable:
-    return partial(jnp.polyval, jnp.flip(coefs))
-
-def make_polynomials(coefs: Float[Array, 'n d']) -> Callable:
-    polynomials = [make_polynomial(c) for c in coefs]
-    return (lambda x: jnp.array([f(xi) for f, xi in zip(polynomials, x)]))

@@ -1,31 +1,25 @@
-import random, jax, jax.numpy as jnp
-
+import jax, jax.numpy as jnp
 from jaxtyping import jaxtyped, Float, Array, ArrayLike
 from beartype.typing import Callable, Tuple, Optional
 from beartype import beartype
 
-def make_log(verbose: int, prefix: str = '') -> Callable[[], None]:
-    def log(*args):
-        if verbose <= 0: return
-        print(prefix, end='')
-        print(*args, flush=True)
-    return log
-
-def get_random_key() -> Array: return jax.random.key(random.randint(0, int(1e10)))
+from untangle._common import get_random_key
+from untangle import _ops as ops
 
 @jaxtyped(typechecker=beartype)
 def collect_information(
-
     function: Callable[[ArrayLike], Array],
     N: int, 
     m: int, 
     key: Array = None,
     minval: float = 0.0, 
     maxval: float = 1.0,
-
 ) -> Tuple[Float[Array, 'N m'], Float[Array, 'N n'], Float[Array, 'n m N']]:
 
-    '''Collect outputs Y and stacked jacobian J of the function.'''
+    '''
+    Generates random inputs X and collects outputs Y
+    and stacked jacobian tensor J.
+    '''
 
     assert callable(function)
 
@@ -40,49 +34,27 @@ def collect_information(
 
     return (X, Y, J.transpose((1, 2, 0)))
 
-@jax.jit
 @jaxtyped(typechecker=beartype)
 def reconstruct_tensor(
-
-    factors: Tuple[
-        Float[Array, 'n r'],
-        Float[Array, 'm r'],
-        Float[Array, 'N r']
-    ],
-
+    factors: Tuple[Float[Array, 'n r'], Float[Array, 'm r'], Float[Array, 'N r']],
     weights: Optional[Float[Array, 'r']] = None,
-
 ) -> Float[Array, 'n m N']:
+    rank = factors[0].shape[1]
+    if weights is None: weights = jnp.ones(rank)
+    return ops.reconstruct(*factors, weights)
 
-    W, V, H = factors
-    N, m, n, r = H.shape[0], V.shape[0], W.shape[0], W.shape[1]
-
-    if weights is None: weights = jnp.ones(r)
-
-    N, m, n = H.shape[0], V.shape[0], W.shape[0]
-    tensor = jnp.zeros(shape=(n, m, N))
-
-    for i in range(r):
-        rank1 = W[:, i][:, None, None] * V[:, i][None, :, None] * H[:, i][None, None, :]
-        tensor += weights[i] * rank1
-
-    return tensor
-
-@jax.jit
 @jaxtyped(typechecker=beartype)
 def cpd_error(
-
     tensor: Float[Array, 'n m N'],
     factors: Tuple[Float[Array, 'n r'], Float[Array, 'm r'], Float[Array, 'N r']],
     weights: Optional[Float[Array, 'r']] = None,
-
 ) -> Float[Array, '']:
-
     _tensor = reconstruct_tensor(factors, weights)
-
     return jnp.linalg.norm(tensor - _tensor) / jnp.linalg.norm(tensor)
 
-def function_error(f: Callable, learned: Callable, X: ArrayLike):
+def function_error(f: Callable, learned: Callable, X: ArrayLike) -> float:
+    assert callable(f) and callable(learned)
+
     Y = jnp.array([f(x) for x in X])
     Y_learned = jnp.array([learned(x) for x in X])
 
