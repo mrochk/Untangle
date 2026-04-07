@@ -35,7 +35,7 @@ def collect_information(
     return (X, Y, J.transpose((1, 2, 0)))
 
 @jaxtyped(typechecker=beartype)
-def reconstruct_tensor(
+def cpd_reconstruct(
     factors: Tuple[Float[Array, 'n r'], Float[Array, 'm r'], Float[Array, 'N r']],
     weights: Optional[Float[Array, 'r']] = None,
 ) -> Float[Array, 'n m N']:
@@ -49,7 +49,7 @@ def cpd_error(
     factors: Tuple[Float[Array, 'n r'], Float[Array, 'm r'], Float[Array, 'N r']],
     weights: Optional[Float[Array, 'r']] = None,
 ) -> Float[Array, '']:
-    _tensor = reconstruct_tensor(factors, weights)
+    _tensor = cpd_reconstruct(factors, weights)
     return jnp.linalg.norm(tensor - _tensor) / jnp.linalg.norm(tensor)
 
 def function_error(f: Callable, learned: Callable, X: ArrayLike) -> float:

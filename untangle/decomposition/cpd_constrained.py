@@ -7,7 +7,7 @@ from beartype.typing import Tuple, Optional
 
 from untangle.utils import cpd_error, get_random_key
 from untangle._ops import unfold_kolda, khatri_rao, reshape, block_diag, vandermonde_matrix
-from untangle._common import init_cpd, solve_subproblem, normalize_columns_V
+from untangle._common import solve_cpd_subproblem
 
 @jaxtyped(typechecker=beartype)
 def cpd_constrained(
@@ -35,8 +35,8 @@ def cpd_constrained(
 
     errors = []
 
-    solve_subproblem_W = partial(solve_subproblem, unfolded=unfold_kolda(tensor, 0), mode=0)
-    solve_subproblem_V = partial(solve_subproblem, unfolded=unfold_kolda(tensor, 1), mode=1)
+    solve_subproblem_W = partial(solve_cpd_subproblem, unfolded=unfold_kolda(tensor, 0), mode=0)
+    solve_subproblem_V = partial(solve_cpd_subproblem, unfolded=unfold_kolda(tensor, 1), mode=1)
 
     for iteration in range(max_iters):
         W = solve_subproblem_W(W=W, V=V, H=H)

@@ -36,9 +36,11 @@ def initialize(tensor: Float[Array, 'n m N'], rank: int, key: Array, with_R: boo
 
 ### CP decomposition
 
-@jax.jit(static_argnames=('mode',))
+def cpd_stopping_criterion(diff: float, tol: float, norm: float) -> bool:
+    return diff < tol * norm
+
 @jaxtyped(typechecker=beartype)
-def solve_subproblem(
+def solve_cpd_subproblem(
     unfolded: Array, 
     W: Float[Array, 'n r'], 
     V: Float[Array, 'm r'],
@@ -46,25 +48,10 @@ def solve_subproblem(
     mode: int,
 ):
     assert 0 <= mode <= 2
-
     match mode:
-        case 0:
-            KR = ops.khatri_rao(H, V)
-            CC = H.T @ H
-            BB = V.T @ V
-            return unfolded @ KR @ jnp.linalg.pinv(CC * BB)
-
-        case 1:
-            KR = ops.khatri_rao(H, W)
-            CC = H.T @ H
-            AA = W.T @ W
-            return unfolded @ KR @ jnp.linalg.pinv(CC * AA)
-
-        case 2:
-            KR = ops.khatri_rao(V, W)
-            BB = V.T @ V
-            AA = W.T @ W
-            return unfolded @ KR @ jnp.linalg.pinv(BB * AA)
+        case 0: return ops.cpd_als_solve(unfolded, H, V)
+        case 1: return ops.cpd_als_solve(unfolded, H, W)
+        case 2: return ops.cpd_als_solve(unfolded, V, W)
 
 ### stuff related to fitting internals
 

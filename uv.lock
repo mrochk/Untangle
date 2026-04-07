@@ -637,6 +637,11 @@ dependencies = [
     { name = "tqdm" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "untangle" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "beartype", specifier = ">=0.22.9" },
@@ -645,6 +650,9 @@ requires-dist = [
     { name = "matplotlib", specifier = ">=3.10.8" },
     { name = "tqdm", specifier = ">=4.67.3" },
 ]
+
+[package.metadata.requires-dev]
+dev = [{ name = "untangle", virtual = "." }]
 
 [[package]]
 name = "wadler-lindig"

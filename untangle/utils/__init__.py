@@ -1,8 +1,7 @@
 from .utils import (
     collect_information,
-    reconstruct_tensor,
+    cpd_reconstruct,
     get_random_key,
     function_error,
     cpd_error,
-    make_log,
 )

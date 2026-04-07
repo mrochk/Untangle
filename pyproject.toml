@@ -14,3 +14,17 @@ dependencies = [
 
 [tool.setuptools]
 packages = ["untangle"]
+
+[tool.uv.workspace]
+members = [
+    ".",
+    ".",
+]
+
+[tool.uv.sources]
+untangle = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "untangle",
+]

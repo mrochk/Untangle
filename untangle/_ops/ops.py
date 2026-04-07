@@ -20,6 +20,13 @@ def khatri_rao(A: Float[Array, 'm k'], B: Float[Array, 'n k']) -> Float[Array, '
     return (A[:, None, :] * B[None, :, :]).reshape(m*n, k)
 
 @jax.jit
+def cpd_als_solve(unfolded, A, B):
+    KR = khatri_rao(A, B)
+    CC = A.T @ A
+    BB = B.T @ B
+    return unfolded @ KR @ jnp.linalg.pinv(CC * BB)
+
+@jax.jit
 def block_diag(arrays: Iterable[ArrayLike]) -> Float[Array, 'a b']:
     arrays = [jnp.atleast_2d(a) for a in arrays]
     rows = sum([a.shape[0] for a in arrays])
@@ -38,11 +45,6 @@ def block_diag(arrays: Iterable[ArrayLike]) -> Float[Array, 'a b']:
 
 @jax.jit
 def reconstruct(W: Array, V: Array, H: Array, weights: Array) -> Array:
-    N, m, n, rank = H.shape[0], V.shape[0], W.shape[0], W.shape[1]
-
-    N, m, n = H.shape[0], V.shape[0], W.shape[0]
-    tensor = jnp.zeros(shape=(n, m, N))
-
     def forloop(r, tensor):
         weight = weights[r]
         w = W[:, r][:, None, None]
@@ -51,7 +53,8 @@ def reconstruct(W: Array, V: Array, H: Array, weights: Array) -> Array:
         rank1 = weight * w * v * h 
         return tensor + rank1
 
-    return jax.lax.fori_loop(0, rank, forloop, tensor)
+    N, m, n, rank = H.shape[0], V.shape[0], W.shape[0], W.shape[1]
+    return jax.lax.fori_loop(0, rank, forloop, jnp.zeros(shape=(n, m, N)))
 
 ### vandermonde stuff
 
@@ -91,7 +94,7 @@ def normalize_columns_simple(factor: Float[Array, '_ r']) -> Tuple[Float[Array, 
         factor = factor.at[:, r].set(column / norm)
         return factor, weights
 
-    return jax.lax.fori_loop(0, rank, forloop, (rank, weights))
+    return jax.lax.fori_loop(0, rank, forloop, (factor, weights))
 
 @jax.jit
 def normalize_columns_V(W: Float[Array, 'n r'], V: Float[Array, 'm r']):
