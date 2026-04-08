@@ -1,5 +1,6 @@
 import jax, jax.numpy as jnp
 from beartype import beartype
+from beartype.typing import Optional
 from jaxtyping import jaxtyped, Array, Float
 
 from untangle.algorithm import Decoupling
@@ -16,7 +17,7 @@ def basic_decoupling(
     degree: int = 3,
     maxiters: int = 100,
     verbose: int = 0,
-    key: Array = None,
+    key: Optional[Array] = None,
     **cpd_kwargs,
 ) -> Decoupling:
     
