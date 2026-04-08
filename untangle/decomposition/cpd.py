@@ -21,7 +21,7 @@ def cpd(
     rank: int,
     maxiters: int = 100,
     key: Optional[Array] = None,
-    tol: float = 1e-6,
+    tol: float = 1e-8,
     verbose: int = 0,
 ) -> Tuple[
     Tuple[Float[Array, 'n r'], Float[Array, 'm r'], Float[Array, 'N r']],
@@ -44,7 +44,7 @@ def cpd(
     solve_V = partial(solve_cpd_subproblem, unfolded=unfold_kolda(tensor, 1), mode=1)
     solve_H = partial(solve_cpd_subproblem, unfolded=unfold_kolda(tensor, 2), mode=2)
 
-    bar = tqdm(range(maxiters), 'Computing CPD')
+    bar = tqdm(range(maxiters), prefix)
     for iteration in bar:
         W, _       = normalize_columns_simple(solve_W(W=W, V=V, H=H))
         V, _       = normalize_columns_simple(solve_V(W=W, V=V, H=H))

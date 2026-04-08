@@ -6,13 +6,12 @@ from jaxtyping import jaxtyped, Float, Array
 from beartype import beartype
 
 from untangle.algorithm import Decoupling
-from untangle._ops import unfold_kolda, khatri_rao
-from untangle.utils import get_random_key, cpd_error, make_log
+from untangle._ops import unfold_kolda, khatri_rao, normalize_columns_V, lstsq, cmtf_lstsq
+from untangle.utils import cpd_error
 from untangle._common import (
-    normalize_columns_V, 
+    get_random_key,
+    make_log,
     fit_internals, 
-    lstsq,
-    cmtf_lstsq,
     initialize,
     make_internals, 
 )

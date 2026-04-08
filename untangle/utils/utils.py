@@ -3,15 +3,15 @@ from jaxtyping import jaxtyped, Float, Array, ArrayLike
 from beartype.typing import Callable, Tuple, Optional
 from beartype import beartype
 
-from untangle._common import get_random_key
+from untangle._common import get_random_key, find_number_inputs
 from untangle import _ops as ops
 
 @jaxtyped(typechecker=beartype)
 def collect_information(
     function: Callable[[ArrayLike], Array],
     N: int, 
-    m: int, 
-    key: Array = None,
+    key: Optional[Array] = None,
+    n_inputs: Optional[int] = None, 
     minval: float = 0.0, 
     maxval: float = 1.0,
 ) -> Tuple[Float[Array, 'N m'], Float[Array, 'N n'], Float[Array, 'n m N']]:
@@ -23,12 +23,13 @@ def collect_information(
 
     assert callable(function)
 
+    if n_inputs is None: n_inputs = find_number_inputs(function)
     if key is None: key = get_random_key()
 
     jacobian = jax.jit(jax.vmap(jax.jacobian(function)))
     function = jax.jit(jax.vmap(function))
 
-    X = jax.random.uniform(key, shape=(N, m), minval=minval, maxval=maxval)
+    X = jax.random.uniform(key, shape=(N, n_inputs), minval=minval, maxval=maxval)
     Y = function(X)
     J = jacobian(X)
 
@@ -52,11 +53,11 @@ def cpd_error(
     _tensor = cpd_reconstruct(factors, weights)
     return jnp.linalg.norm(tensor - _tensor) / jnp.linalg.norm(tensor)
 
-def function_error(f: Callable, learned: Callable, X: ArrayLike) -> float:
-    assert callable(f) and callable(learned)
+def function_error(true_func: Callable, learned_func: Callable, X: ArrayLike) -> float:
+    assert callable(true_func) and callable(learned_func)
 
-    Y = jnp.array([f(x) for x in X])
-    Y_learned = jnp.array([learned(x) for x in X])
+    Y = jnp.array([true_func(x) for x in X])
+    Y_learned = jnp.array([learned_func(x) for x in X])
 
     top = jnp.sqrt(jnp.mean((Y - Y_learned)**2, axis=0))
     bot = jnp.sqrt(jnp.mean((Y - jnp.mean(Y, axis=0))**2, axis=0))

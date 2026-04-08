@@ -18,6 +18,13 @@ def make_log(verbose: int, prefix: str = '') -> Callable[[], None]:
 def get_random_key() -> Array:
     return jax.random.key(random.randint(0, int(1e10)))
 
+def find_number_inputs(function: Callable):
+    assert callable(function)
+    m = 1
+    while True:
+        try: function(jnp.zeros(m)); return m
+        except ValueError: m += 1
+
 ### factors initialization
 
 @jaxtyped(typechecker=beartype)
@@ -56,11 +63,11 @@ def solve_cpd_subproblem(
 ### stuff related to fitting internals
 
 def make_polynomial(coefs: Float[Array, 'd']) -> Callable:
-    return partial(jnp.polyval, jnp.flip(coefs))
+    return partial(jnp.polyval, p=jnp.flip(coefs))
 
 def make_polynomials(coefs: Float[Array, 'n d']) -> Callable:
     polynomials = [make_polynomial(c) for c in coefs]
-    return (lambda x: jnp.array([f(xi) for f, xi in zip(polynomials, x)]))
+    return (lambda x: jnp.array([f(x=xi) for f, xi in zip(polynomials, x)]))
 
 def make_internals(internals):
     return lambda u: jnp.array([gi(ui) for gi, ui in zip(internals, u)])

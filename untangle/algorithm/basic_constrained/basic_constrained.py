@@ -1,14 +1,12 @@
 import jax, jax.numpy as jnp
-import multiprocessing as mp
 from numpy.polynomial import Polynomial
 
 from beartype import beartype
 from jaxtyping import jaxtyped, Array, Float
 
-from untangle.utils import make_log
 from untangle.algorithm import Decoupling
-from untangle.decomposition import run_many_cpd_constrained
-from untangle.algorithm.common import make_polynomials
+from untangle.decomposition import cpd_polynomial_constraint
+from untangle._common import make_polynomials, make_log
 
 @jaxtyped(typechecker=beartype)
 def basic_constrained(
@@ -17,19 +15,19 @@ def basic_constrained(
     J: Float[Array, 'n m N'], 
     rank: int,
     degree: int = 3,
-    n_init: int = mp.cpu_count(),
+    maxiters: int = 100,
     verbose: int = 0,
+    key: Array = None,
+    **cpd_kwargs,
 ) -> Decoupling:
-    
-    log = make_log(verbose, '|BASIC-CONSTRAINED| -> ')
-    log(f'Computing CP decomposition with polynomial constraint of J with rank {rank} and {n_init} inits...')
 
-    factors, dcoefs = run_many_cpd_constrained(J, X, rank, degree, verbose=verbose)
+    log = make_log(verbose, '|BASIC-CONSTRAINED| -> ')
+
+    factors, dcoefs, _ = cpd_polynomial_constraint(X, J, rank, degree, maxiters, key, verbose=verbose, **cpd_kwargs)
     W, V, H = factors
 
     Z = X @ V
 
-    log('Recovering internals by integrating...')
     coefs = integrate(dcoefs, Z, Y, W)
 
     internals = make_polynomials(coefs)
@@ -81,4 +79,4 @@ def integrate(dcoefs, Z, Y, W):
     c_zeros = jnp.linalg.lstsq(columns_W, residuals, rcond=None)[0]
     coefs = coefs.at[0, :].set(c_zeros)
 
-    return coefs
+    return coefs.T

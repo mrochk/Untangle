@@ -30,11 +30,16 @@ factors, weights, errs = cpd(tensor, rank, key=key)
 
 print('CPD Errors:', errs)
 
-fig, ax = plt.subplots(2)
+fig, ax = plt.subplots(1, 2)
 
 rtensor = cpd_reconstruct(factors, weights)
 
 ax[0].matshow(tensor[0])
+ax[0].set_title('Original Tensor')
+
 ax[1].matshow(rtensor[0])
+ax[1].set_title('CPD Tensor')
+
+fig.tight_layout()
 
 fig.savefig('plots/cpd.png')
