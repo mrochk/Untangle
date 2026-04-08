@@ -1,6 +1,6 @@
 import jax.numpy as jnp
 
-from untangle.algorithm import basic_decoupling, basic_constrained
+from untangle.algorithm import basic_decoupling, ctd_polynomial
 from untangle.utils import collect_information, function_error
 
 def f(x):
@@ -23,6 +23,6 @@ errors = function_error(f, f_hat, X)
 print('Errors:', errors)
 
 print('\nWith polynomial constraint:')
-f_hat = basic_constrained(X, Y, J, rank, degree)
+f_hat = ctd_polynomial(X, Y, J, rank, degree)
 errors = function_error(f, f_hat, X)
 print('Errors:', errors)

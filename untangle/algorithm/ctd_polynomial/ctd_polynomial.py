@@ -9,7 +9,7 @@ from untangle.decomposition import cpd_polynomial_constraint
 from untangle._common import make_polynomials, make_log
 
 @jaxtyped(typechecker=beartype)
-def basic_constrained(
+def ctd_polynomial(
     X: Float[Array, 'N m'], 
     Y: Float[Array, 'N n'], 
     J: Float[Array, 'n m N'], 
@@ -21,7 +21,7 @@ def basic_constrained(
     **cpd_kwargs,
 ) -> Decoupling:
 
-    log = make_log(verbose, '|BASIC-CONSTRAINED| -> ')
+    log = make_log(verbose, '|CTD-POLYNOMIAL| -> ')
 
     factors, dcoefs, _ = cpd_polynomial_constraint(X, J, rank, degree, maxiters, key, verbose=verbose, **cpd_kwargs)
     W, V, H = factors

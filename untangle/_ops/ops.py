@@ -72,11 +72,11 @@ def vandermonde_diag(X, d: int):
 @jax.jit
 def lstsq(X, Y): return jnp.linalg.lstsq(X, Y)[0].T
 
-@jax.jit
+@jax.jit(static_argnames='gamma')
 @jaxtyped(typechecker=beartype)
-def cmtf_lstsq(X1, X2, Y1, Y2, lam):
-    X = jnp.concatenate([X1, lam*X2], axis=0)
-    Y = jnp.concatenate([Y1, lam*Y2], axis=0)
+def cmtf_lstsq(X1, X2, Y1, Y2, gamma: float):
+    X = jnp.concatenate([X1, gamma*X2], axis=0)
+    Y = jnp.concatenate([Y1, gamma*Y2], axis=0)
     return jnp.linalg.lstsq(X, Y)[0].T
 
 ### normalization
