@@ -62,6 +62,12 @@ def solve_cpd_subproblem(
 
 ### stuff related to fitting internals
 
+@jax.jit
+def bspline_project(i, coefs, B, dB, H, R):
+    H = H.at[:, i].set(dB @ coefs)
+    R = R.at[:, i].set(B @ coefs)
+    return H, R
+
 def make_polynomial(coefs: Float[Array, 'd']) -> Callable:
     return partial(jnp.polyval, p=jnp.flip(coefs))
 

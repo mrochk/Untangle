@@ -15,6 +15,7 @@ from untangle import _ops as ops
 from untangle._common import (
     get_random_key,
     make_log,
+    bspline_project,
     fit_internals, 
     initialize,
     make_internals, 
@@ -88,31 +89,28 @@ def psplines_projection(
     for rank in range(H.shape[1]):
         u, h, r = U[:, rank], H[:, rank], R[:, rank]
 
-        knots = determine_knots2(u, dof, degree)
+        knots = determine_knots(u, dof, degree)
         B  = design_matrix(u, knots, degree)
         dB = design_dmatrix(u, knots, degree)
-
-        A = jnp.vstack([dB, gamma * B])
-        y = jnp.concatenate([h, gamma * r])
 
         n_basis = B.shape[1]
         D = second_diff_matrix(n_basis)
 
+        A = jnp.vstack([dB, gamma * B])
+        y = jnp.concatenate([h, gamma * r])
+
         lam = gcv(A, y, D, n=len(u))
 
-        # Augment with penalty rows instead of forming normal equations
-        sqrt_lam = jnp.sqrt(lam)
-        A_aug = jnp.vstack([A, sqrt_lam * D])
-        y_aug = jnp.concatenate([y, jnp.zeros(D.shape[0])])
+        # better than using solve(), why ?
+        A = jnp.vstack([A, jnp.sqrt(lam) * D])
+        y = jnp.concatenate([y, jnp.zeros(D.shape[0])])
+        coefs = jnp.linalg.lstsq(A, y)[0]
 
-        coefs = jnp.linalg.lstsq(A_aug, y_aug)[0]
-
-        H, R = project(rank, coefs, B, dB, H, R)
+        H, R = bspline_project(rank, coefs, B, dB, H, R)
 
     return H, R
 
 def design_matrix(u: Float[Array, 'r'], knots: Array, degree: int):
-    # Don't add intercept — clamped B-splines already sum to 1
     matrix = BSpline.design_matrix(u, knots, degree).toarray()
     return jnp.array(matrix)
 
@@ -125,11 +123,10 @@ def design_dmatrix(u, knots, degree: int):
         bspline = BSpline(knots, c, degree)
         dmatrix = dmatrix.at[:, i].set(bspline.derivative(nu=1)(u))
 
-    # No zero column prepended
     return dmatrix
 
 @jax.jit(static_argnames=('dof', 'degree'))
-def determine_knots2(u: Float[Array, 'r'], dof: int, degree: int) -> Array:
+def determine_knots(u: Float[Array, 'r'], dof: int, degree: int) -> Array:
     internals = dof - degree + 1
 
     knots = jnp.linspace(jnp.min(u), jnp.max(u), internals)
@@ -137,39 +134,6 @@ def determine_knots2(u: Float[Array, 'r'], dof: int, degree: int) -> Array:
     begin = jnp.repeat(knots[0], degree)
     end   = jnp.repeat(knots[-1], degree)
     return jnp.concat([begin, knots, end])
-
-@jax.jit(static_argnames=('dof', 'degree'))
-def determine_knots(u: Float[Array, 'r'], dof: int, degree: int) -> Array:
-    internals = dof - degree + 1
-
-    qs = jnp.linspace(0, 1, internals)
-    knots = jnp.quantile(u, qs)
-    knots = jax.vmap(partial(closest, u=u))(knots)
-
-    begin = jnp.repeat(knots[0], degree)
-    end = jnp.repeat(knots[-1], degree)
-    return jnp.concat([begin, knots, end])
-
-@jax.jit
-def closest(knot, u):
-    def forloop(i, args):
-        min_dist, closest_x = args
-        x = u[i]
-        dist = jnp.abs(x - knot)
-        return jax.lax.cond(
-            dist < min_dist,
-            lambda: (dist, x),
-            lambda: (min_dist, closest_x),
-        )
-
-    _, closest_point = jax.lax.fori_loop(0, len(u), forloop, (jnp.inf, u[0]))
-    return closest_point
-
-@jax.jit
-def project(i, coefs, B, dB, H, R):
-    H = H.at[:, i].set(dB @ coefs)
-    R = R.at[:, i].set(B @ coefs)
-    return H, R
 
 @jax.jit(static_argnames='n')
 def second_diff_matrix(n: int) -> Array:
@@ -200,4 +164,3 @@ def gcv(A: Array, y: Array, D: Array, n: int) -> Array:
     log_lams = jnp.linspace(-8, 3, 1000)
     scores   = jax.vmap(lambda ll: gcv_score(ll, A, y, D, n))(log_lams)
     return 10.0 ** log_lams[jnp.argmin(scores)]
-

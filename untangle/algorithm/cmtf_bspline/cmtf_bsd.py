@@ -13,6 +13,7 @@ from untangle import _ops as ops
 from untangle._common import (
     get_random_key,
     make_log,
+    bspline_project,
     fit_internals, 
     initialize,
     make_internals, 
@@ -92,7 +93,7 @@ def bsplines_projection(
         dB = design_dmatrix(u, knots, degree)
 
         coefs = ops.cmtf_lstsq(dB, B, h, r, gamma)
-        H, R = project(rank, coefs, B, dB, H, R)
+        H, R = bspline_project(rank, coefs, B, dB, H, R)
 
     return H, R
 
@@ -139,9 +140,3 @@ def closest(knot, u):
 
     _, closest_point = jax.lax.fori_loop(0, len(u), forloop, (jnp.inf, u[0]))
     return closest_point
-
-@jax.jit
-def project(i, coefs, B, dB, H, R):
-    H = H.at[:, i].set(dB @ coefs)
-    R = R.at[:, i].set(B @ coefs)
-    return H, R

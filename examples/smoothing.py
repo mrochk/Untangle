@@ -1,10 +1,10 @@
 import jax, jax.numpy as jnp
 
+from untangle.scaler import JacobianScaler
 from untangle.algorithm import cmtf_bsd, cmtf_psd
 from untangle.utils import collect_information, function_error
-from untangle.scaler import JacobianScaler
 
-key = jax.random.key(0)
+key  = jax.random.key(0)
 keys = jax.random.split(key, 10)
 
 def f(x):
@@ -14,18 +14,17 @@ def f(x):
         3*b**2 + 2*a - 1,
     ])
 
-def f(x):
-    a, b = x
-    return jnp.array([
-        2*a**3 + b**2 + 1,
-        3*b**2 + 2*a - 1,
-    ])
+#def f(x):
+    #a, b = x
+    #return jnp.array([
+        #1000*(jnp.cos(3*jnp.pi*a) + b**2 + 1),
+        #-jnp.sin(4*jnp.pi*b) + 0.5*a + 2,
+    #])
     
-N = 50
-rank = 5
+N = 100
+rank = 3
 niters = 10
-dof = N
-
+dof = 10
 
 X_test, _, _ = collect_information(f, N, jax.random.key(42))
 
@@ -36,11 +35,13 @@ for key in keys:
     scaler = JacobianScaler(J, Y)
     J_scaled, Y_scaled = scaler.scale()
 
-    f_hat = scaler.unscale(cmtf_psd(X, Y_scaled, J_scaled, rank, niters=niters, dof=dof, key=key))
+    info = (X, Y_scaled, J_scaled)
+
+    f_hat = scaler.unscale(cmtf_psd(*info, rank, niters=niters, dof=dof, key=key))
     errors = function_error(f, f_hat, X_test)
     print('PSD Errors:', errors)
 
-    f_hat = scaler.unscale(cmtf_bsd(X, Y_scaled, J_scaled, rank, niters=niters, dof=dof, key=key))
+    f_hat = scaler.unscale(cmtf_bsd(*info, rank, niters=niters, dof=dof, key=key))
     errors = function_error(f, f_hat, X_test)
     print('BSD Errors:', errors)
 
