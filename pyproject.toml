@@ -12,14 +12,19 @@ dependencies = [
     "tqdm>=4.67.3",
 ]
 
-[tool.setuptools]
-packages = ["untangle"]
+authors = [{ name = "Maxime Rochkoulets", email = "mrochkoulets@gmail.com" }]
+
+[project.urls]
+Homepage = "https://github.com/mrochk/untangle"
+Repository = "https://github.com/mrochk/untangle"
+Issues = "https://github.com/mrochk/untangle/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["untangle*"]
 
 [tool.uv.workspace]
-members = [
-    ".",
-    ".",
-]
+members = ["."]
 
 [tool.uv.sources]
 untangle = { workspace = true }
