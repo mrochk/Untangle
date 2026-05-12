@@ -16,7 +16,7 @@ from untangle._common import (
     fit_internals, 
     initialize,
     make_internals, 
-    determine_knots_quantiles,
+    determine_knots,
     get_design_matrix, 
     get_design_dmatrix,
 )
@@ -49,7 +49,9 @@ def cmtf_bsd(
     J1 = ops.unfold_kolda(J, 1).T
     J2 = ops.unfold_kolda(J, 2).T
 
-    for iteration in tqdm(range(niters), desc=prefix):
+    bar = tqdm(range(niters), desc=prefix)
+
+    for iteration in bar:
         W = ops.cmtf_lstsq(ops.khatri_rao(H, V), R, J0, Y, gamma)
         V = ops.lstsq(ops.khatri_rao(H, W), J1)
         W, V = ops.normalize_columns_V(W, V)
@@ -64,8 +66,10 @@ def cmtf_bsd(
 
         if iteration == 0 or error < best_error:
             best_error = error
+            best_iter = iteration
             best = (W, V, H, R)
 
+        bar.set_postfix_str(f'error={error:.4f}, best={best_error:.4f} ({best_iter})')
         log(f'Iteration [{iteration+1} / {niters}]: error = {error:.4f}, best = {best_error:.4f}')
         best_errors.append(best_error)
 
@@ -90,7 +94,7 @@ def bsplines_projection(
     for rank in range(H.shape[1]):
         u, h, r = U[:, rank], H[:, rank], R[:, rank]
 
-        knots = determine_knots_quantiles(u, dof, degree)
+        knots = determine_knots(u, dof, degree, 'quantile')
 
         B = get_design_matrix(u, knots, degree)
         dB = get_design_dmatrix(u, knots, degree)

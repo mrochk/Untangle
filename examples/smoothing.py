@@ -14,19 +14,20 @@ def f(x):
         3*b**2 + 2*a - 1,
     ])
 
-#def f(x):
-    #a, b = x
-    #return jnp.array([
-        #1000*(jnp.cos(3*jnp.pi*a) + b**2 + 1),
-        #-jnp.sin(4*jnp.pi*b) + 0.5*a + 2,
-    #])
-    
-N = 100
-rank = 5
-niters = 100
-dof = 20
+def f(x):
+    a, b = x
+    return jnp.array([
+        jnp.cos(4*jnp.pi*a) + b,
+        -jnp.sin(3*jnp.pi*a) + a**2,
+    ])
+
+N = 50
+niters = 20
+dof = N//2
 
 X_test, _, _ = collect_information(f, N, jax.random.key(42))
+
+rank = 3
 
 for key in keys:
 
@@ -37,12 +38,15 @@ for key in keys:
 
     info = (X, Y_scaled, J_scaled)
 
-    #f_hat = scaler.unscale(cmtf_psd(*info, rank, niters=niters, dof=dof, key=key))
-    #errors = function_error(f, f_hat, X_test)
-    #print('PSD Errors:', errors)
+    print(rank)
+
+    f_hat = scaler.unscale(cmtf_psd(*info, rank, niters=niters, dof=dof, key=key))
+    errors = function_error(f, f_hat, X_test)
+    print('PSD Errors:', errors)
 
     f_hat = scaler.unscale(cmtf_bsd(X, Y_scaled, J_scaled, rank, niters=niters, dof=dof, key=key))
     errors = function_error(f, f_hat, X_test)
     print('BSD Errors:', errors)
 
-    print()
+
+    rank += 1

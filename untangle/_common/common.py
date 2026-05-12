@@ -1,10 +1,10 @@
 import random
 import jax, jax.numpy as jnp
 from jaxtyping import jaxtyped, Array, Float
-from bsplx import design_matrix, design_dmatrix, fit_bspline_dcoefs, bspline_inference
+from bsplx import design_matrix, design_dmatrix, bspline_inference
 from functools import partial
 from beartype import beartype 
-from beartype.typing import Callable 
+from beartype.typing import Callable
 
 from untangle import _ops as ops
 
@@ -120,8 +120,24 @@ def get_design_dmatrix(z, knots, degree: int):
     dmatrix = jnp.concatenate([jnp.zeros((dmatrix.shape[0], 1)), dmatrix], axis=1)
     return dmatrix
 
+def determine_knots(z: Float[Array, 'r'], dof: int, degree: int, method: str) -> Array:
+    match method:
+        case 'even': return _determine_knots_even(z, dof, degree)
+        case 'quantile': return _determine_knots_quantiles(z, dof, degree)
+        case _: raise ValueError()
+
 @jax.jit(static_argnames=('dof', 'degree'))
-def determine_knots_quantiles(u: Float[Array, 'r'], dof: int, degree: int) -> Array:
+def _determine_knots_even(u: Float[Array, 'r'], dof: int, degree: int) -> Array:
+    internals = dof - degree + 1
+
+    knots = jnp.linspace(jnp.min(u), jnp.max(u), internals)
+
+    begin = jnp.repeat(knots[0], degree)
+    end   = jnp.repeat(knots[-1], degree)
+    return jnp.concat([begin, knots, end])
+
+@jax.jit(static_argnames=('dof', 'degree'))
+def _determine_knots_quantiles(u: Float[Array, 'r'], dof: int, degree: int) -> Array:
     internals = dof - degree + 1
 
     qs = jnp.linspace(0, 1, internals)
