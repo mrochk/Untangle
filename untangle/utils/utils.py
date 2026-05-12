@@ -56,8 +56,8 @@ def cpd_error(
 def function_error(true_func: Callable, learned_func: Callable, X: ArrayLike) -> float:
     assert callable(true_func) and callable(learned_func)
 
-    Y = jnp.array([true_func(x) for x in X])
-    Y_learned = jnp.array([learned_func(x) for x in X])
+    Y = jax.vmap(true_func)(X)
+    Y_learned = jax.vmap(learned_func)(X)
 
     top = jnp.sqrt(jnp.mean((Y - Y_learned)**2, axis=0))
     bot = jnp.sqrt(jnp.mean((Y - jnp.mean(Y, axis=0))**2, axis=0))

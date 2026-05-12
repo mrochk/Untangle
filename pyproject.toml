@@ -5,11 +5,12 @@ description = "Jax package for decoupling multivariate functions using tensor de
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "beartype>=0.22.9",
     "jax>=0.9.0.1",
     "jaxtyping>=0.3.9",
-    "matplotlib>=3.10.8",
+    "beartype>=0.22.9",
     "tqdm>=4.67.3",
+    "matplotlib>=3.10.8",
+    "bsplx",
 ]
 
 authors = [{ name = "Maxime Rochkoulets", email = "mrochkoulets@gmail.com" }]
@@ -24,10 +25,15 @@ where = ["."]
 include = ["untangle*"]
 
 [tool.uv.workspace]
-members = ["."]
+members = [
+    ".",
+    "splx",
+    "bsplx",
+]
 
 [tool.uv.sources]
 untangle = { workspace = true }
+bsplx = { workspace = true }
 
 [dependency-groups]
 dev = [

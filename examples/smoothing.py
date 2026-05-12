@@ -22,9 +22,9 @@ def f(x):
     #])
     
 N = 100
-rank = 3
-niters = 10
-dof = 10
+rank = 5
+niters = 100
+dof = 20
 
 X_test, _, _ = collect_information(f, N, jax.random.key(42))
 
@@ -37,11 +37,11 @@ for key in keys:
 
     info = (X, Y_scaled, J_scaled)
 
-    f_hat = scaler.unscale(cmtf_psd(*info, rank, niters=niters, dof=dof, key=key))
-    errors = function_error(f, f_hat, X_test)
-    print('PSD Errors:', errors)
+    #f_hat = scaler.unscale(cmtf_psd(*info, rank, niters=niters, dof=dof, key=key))
+    #errors = function_error(f, f_hat, X_test)
+    #print('PSD Errors:', errors)
 
-    f_hat = scaler.unscale(cmtf_bsd(*info, rank, niters=niters, dof=dof, key=key))
+    f_hat = scaler.unscale(cmtf_bsd(X, Y_scaled, J_scaled, rank, niters=niters, dof=dof, key=key))
     errors = function_error(f, f_hat, X_test)
     print('BSD Errors:', errors)
 

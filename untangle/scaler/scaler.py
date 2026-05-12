@@ -52,5 +52,5 @@ class JacobianScaler:
 
     @jaxtyped(typechecker=beartype)
     def unscale(self, f_scaled: Callable) -> Callable:
-        def f_unscaled(x): return f_scaled(x) / self.factors
+        def f_unscaled(x): return (f_scaled(x).T / self.factors).T
         return f_unscaled

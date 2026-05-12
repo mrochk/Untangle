@@ -11,6 +11,8 @@ nb
 # C extensions
 *.so
 
+bsplx
+
 # Distribution / packaging
 .Python
 build/

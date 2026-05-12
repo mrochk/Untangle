@@ -21,7 +21,7 @@ def basic_decoupling(
     **cpd_kwargs,
 ) -> Decoupling:
     
-    log = make_log(verbose, '|BASIC-DECOUPLING| -> ')
+    log = make_log(verbose, '|BASIC-DECOUPLING|')
 
     factors, weights, _ = cpd(J, rank, maxiters, key, **cpd_kwargs)
     W, V, H = factors
@@ -29,13 +29,13 @@ def basic_decoupling(
     W = W * weights
 
     log('Recovering internal coefficients...')
-    coefs = find_internals_coefs(X, Y, W, V, degree)
+    coefs = _find_internals_coefs(X, Y, W, V, degree)
 
     internals = make_polynomials(coefs)
 
     return Decoupling((W, V, H), internals)
 
-def find_internals_coefs(
+def _find_internals_coefs(
     X: Float[Array, 'N m'],
     Y: Float[Array, 'N n'],
     W: Float[Array, 'n r'],

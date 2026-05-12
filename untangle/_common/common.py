@@ -1,7 +1,7 @@
 import random
 import jax, jax.numpy as jnp
 from jaxtyping import jaxtyped, Array, Float
-from scipy.interpolate import BSpline, make_smoothing_spline
+from bsplx import design_matrix, design_dmatrix, fit_bspline_dcoefs, bspline_inference
 from functools import partial
 from beartype import beartype 
 from beartype.typing import Callable 
@@ -11,7 +11,7 @@ from untangle import _ops as ops
 def make_log(verbose: int, prefix: str = '') -> Callable[[], None]:
     def log(*args):
         if verbose <= 0: return
-        print(prefix, end='')
+        print(prefix, end=' ' if prefix else '')
         print(*args, flush=True)
     return log
 
@@ -78,13 +78,22 @@ def make_polynomials(coefs: Float[Array, 'n d']) -> Callable:
 def make_internals(internals):
     return lambda u: jnp.array([gi(ui) for gi, ui in zip(internals, u)])
 
+from scipy.interpolate import make_smoothing_spline
+
 def fit_internal(z_s, h_s, r_s):
-    dg: BSpline = make_smoothing_spline(z_s, h_s)
+    dss = make_smoothing_spline(z_s, h_s)
+    ss = dss.antiderivative()
 
-    g_bias: BSpline = dg.antiderivative()
-    bias = jnp.median(r_s - g_bias(z_s))
+    bias = jnp.median(r_s - ss(z_s))
+    c = jnp.array(ss.c)
+    knots = jnp.array(ss.t)
+    d = ss.k
 
-    def g(x): return g_bias(x) + bias
+    # ensure n_basis consistency: c must have len(knots) - d - 1 coefficients
+    n_basis = len(knots) - d - 1
+    c = c[:n_basis]
+
+    def g(x): return bspline_inference(x, c, knots, d) + bias
     return g
 
 def fit_internals(Z, H, R):
@@ -100,3 +109,40 @@ def fit_internals(Z, H, R):
         internals.append(g)
 
     return internals
+
+def get_design_matrix(z, knots: Array, degree: int):
+    matrix = design_matrix(z, knots, degree)
+    matrix = jnp.concatenate([jnp.ones((matrix.shape[0], 1)), matrix], axis=1)
+    return matrix
+
+def get_design_dmatrix(z, knots, degree: int):
+    dmatrix = design_dmatrix(z, knots, degree)
+    dmatrix = jnp.concatenate([jnp.zeros((dmatrix.shape[0], 1)), dmatrix], axis=1)
+    return dmatrix
+
+@jax.jit(static_argnames=('dof', 'degree'))
+def determine_knots_quantiles(u: Float[Array, 'r'], dof: int, degree: int) -> Array:
+    internals = dof - degree + 1
+
+    qs = jnp.linspace(0, 1, internals)
+    knots = jnp.quantile(u, qs)
+    knots = jax.vmap(partial(_closest, u=u))(knots)
+
+    begin = jnp.repeat(knots[0], degree)
+    end = jnp.repeat(knots[-1], degree)
+    return jnp.concat([begin, knots, end])
+
+@jax.jit
+def _closest(knot, u):
+    def forloop(i, args):
+        min_dist, closest_x = args
+        x = u[i]
+        dist = jnp.abs(x - knot)
+        return jax.lax.cond(
+            dist < min_dist,
+            lambda: (dist, x),
+            lambda: (min_dist, closest_x),
+        )
+
+    _, closest_point = jax.lax.fori_loop(0, len(u), forloop, (jnp.inf, u[0]))
+    return closest_point

@@ -1,5 +1,4 @@
 import jax, jax.numpy as jnp
-from scipy.interpolate import BSpline
 from functools import partial
 from tqdm import tqdm
 
@@ -17,6 +16,9 @@ from untangle._common import (
     fit_internals, 
     initialize,
     make_internals, 
+    determine_knots_quantiles,
+    get_design_matrix, 
+    get_design_dmatrix,
 )
 
 @jaxtyped(typechecker=beartype)
@@ -25,17 +27,18 @@ def cmtf_bsd(
     Y: Float[Array, 'N n'],
     J: Float[Array, 'n m N'],
     rank: int,
-    gamma: float = 0.1,
     niters: int = 100,
-    dof: int = 12,
+    dof: Optional[int] = None,
+    gamma: float = 0.1,
     degree: int = 3,
     verbose: int = 0,
     key: Optional[Array] = None,
 ) -> Decoupling:
 
     if key is None: key = get_random_key() 
+    if dof is None: dof = X.shape[0] // 2
 
-    prefix = '|CMTF-BSD| ->'
+    prefix = '|CMTF-BSD|'
     log = make_log(verbose, prefix)
 
     best_errors = []
@@ -87,56 +90,12 @@ def bsplines_projection(
     for rank in range(H.shape[1]):
         u, h, r = U[:, rank], H[:, rank], R[:, rank]
 
-        knots = determine_knots(u, dof, degree)
+        knots = determine_knots_quantiles(u, dof, degree)
 
-        B = design_matrix(u, knots, degree)
-        dB = design_dmatrix(u, knots, degree)
+        B = get_design_matrix(u, knots, degree)
+        dB = get_design_dmatrix(u, knots, degree)
 
         coefs = ops.cmtf_lstsq(dB, B, h, r, gamma)
         H, R = bspline_project(rank, coefs, B, dB, H, R)
 
     return H, R
-
-def design_matrix(u: Float[Array, 'r'], knots: Array, degree: int):
-    matrix = BSpline.design_matrix(u, knots, degree).toarray()
-    matrix = jnp.concatenate([jnp.ones((matrix.shape[0], 1)), matrix], axis=1)
-    return matrix
-
-def design_dmatrix(u, knots, degree: int):
-    n_basis = len(knots) - degree - 1
-    dmatrix = jnp.zeros((len(u), n_basis))
-
-    for i in range(n_basis):
-        c = jnp.zeros(n_basis).at[i].set(1)
-        bspline = BSpline(knots, c, degree)
-        dmatrix = dmatrix.at[:, i].set(bspline.derivative(nu=1)(u))
-
-    dmatrix = jnp.concatenate([jnp.zeros((dmatrix.shape[0], 1)), dmatrix], axis=1)
-    return dmatrix
-
-@jax.jit(static_argnames=('dof', 'degree'))
-def determine_knots(u: Float[Array, 'r'], dof: int, degree: int) -> Array:
-    internals = dof - degree + 1
-
-    qs = jnp.linspace(0, 1, internals)
-    knots = jnp.quantile(u, qs)
-    knots = jax.vmap(partial(closest, u=u))(knots)
-
-    begin = jnp.repeat(knots[0], degree)
-    end = jnp.repeat(knots[-1], degree)
-    return jnp.concat([begin, knots, end])
-
-@jax.jit
-def closest(knot, u):
-    def forloop(i, args):
-        min_dist, closest_x = args
-        x = u[i]
-        dist = jnp.abs(x - knot)
-        return jax.lax.cond(
-            dist < min_dist,
-            lambda: (dist, x),
-            lambda: (min_dist, closest_x),
-        )
-
-    _, closest_point = jax.lax.fori_loop(0, len(u), forloop, (jnp.inf, u[0]))
-    return closest_point

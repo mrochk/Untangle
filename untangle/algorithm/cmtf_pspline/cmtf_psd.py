@@ -37,7 +37,7 @@ def cmtf_psd(
 
     if key is None: key = get_random_key()
 
-    prefix = '|CMTF-PSD| ->'
+    prefix = '|CMTF-PSD|'
     log = make_log(verbose, prefix)
 
     best_errors = []

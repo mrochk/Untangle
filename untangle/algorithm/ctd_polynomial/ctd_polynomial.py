@@ -21,20 +21,20 @@ def ctd_polynomial(
     **cpd_kwargs,
 ) -> Decoupling:
 
-    log = make_log(verbose, '|CTD-POLYNOMIAL| -> ')
+    log = make_log(verbose, '|CTD-POLYNOMIAL|')
 
     factors, dcoefs, _ = cpd_polynomial_constraint(X, J, rank, degree, maxiters, key, verbose=verbose, **cpd_kwargs)
     W, V, H = factors
 
     Z = X @ V
 
-    coefs = integrate(dcoefs, Z, Y, W)
+    coefs = _integrate(dcoefs, Z, Y, W)
 
     internals = make_polynomials(coefs)
 
     return Decoupling(factors, internals)
 
-def integrate(dcoefs, Z, Y, W):
+def _integrate(dcoefs, Z, Y, W):
     assert dcoefs.shape[1] == W.shape[1]
 
     degree, rank = dcoefs.shape
