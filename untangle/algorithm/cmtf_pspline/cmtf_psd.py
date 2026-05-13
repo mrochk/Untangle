@@ -27,15 +27,18 @@ def cmtf_psd(
     Y: Float[Array, 'N n'],
     J: Float[Array, 'n m N'],
     rank: int,
-    gamma: float = 0.1,
     niters: int = 100,
-    dof: int = 12,
+    gamma: float = 0.1,
+    dof: Optional[int] = None,
     degree: int = 3,
     verbose: int = 0,
     key: Optional[Array] = None,
 ) -> Decoupling:
 
+    N = X.shape[0]
+
     if key is None: key = get_random_key()
+    if dof is None: dof = max(min([2*int(jnp.sqrt(N)), N//2]), 1)
 
     prefix = '|CMTF-PSD|'
     log = make_log(verbose, prefix)
@@ -205,7 +208,7 @@ def gcv_lbfgs(
     for log_lam_init in log_lam_inits:
         log_lam, score = run_lbfgs(log_lam_init)
         if jnp.isnan(log_lam): log_lam = 0.0
-        print(log_lam)
+        #print(log_lam)
         if score < best_score:
             best_score   = score
             best_log_lam = log_lam

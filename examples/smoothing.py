@@ -17,8 +17,8 @@ def f(x):
 def f(x):
     a, b = x
     return jnp.array([
-        jnp.cos(4*jnp.pi*a) + b,
-        -jnp.sin(3*jnp.pi*a) + a**2,
+        100*(jnp.cos(4*jnp.pi*a) + b),
+        0.01*(-jnp.sin(3*jnp.pi*b) + a**2),
     ])
 
 N = 50
@@ -27,7 +27,7 @@ dof = N//2
 
 X_test, _, _ = collect_information(f, N, jax.random.key(42))
 
-rank = 3
+rank = 4
 
 for key in keys:
 
@@ -40,13 +40,10 @@ for key in keys:
 
     print(rank)
 
-    f_hat = scaler.unscale(cmtf_psd(*info, rank, niters=niters, dof=dof, key=key))
+    f_hat = scaler.unscale(cmtf_psd(*info, rank, niters=niters, key=key))
     errors = function_error(f, f_hat, X_test)
     print('PSD Errors:', errors)
 
     f_hat = scaler.unscale(cmtf_bsd(X, Y_scaled, J_scaled, rank, niters=niters, dof=dof, key=key))
     errors = function_error(f, f_hat, X_test)
     print('BSD Errors:', errors)
-
-
-    rank += 1

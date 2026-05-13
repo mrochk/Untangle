@@ -81,7 +81,19 @@ def make_internals(internals):
 from scipy.interpolate import make_smoothing_spline
 
 def fit_internal(z_s, h_s, r_s):
-    dss = make_smoothing_spline(z_s, h_s)
+    try:
+        dss = make_smoothing_spline(z_s, h_s)
+    except:
+        try:
+            print(z_s)
+            z_s, idx = jnp.unique(z_s, True)
+            h_s = h_s[idx]
+            r_s = r_s[idx]
+            dss = make_smoothing_spline(z_s, h_s)
+        except:
+            def g(x): return jnp.zeros_like(x)
+            return g
+        
     ss = dss.antiderivative()
 
     bias = jnp.median(r_s - ss(z_s))
