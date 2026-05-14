@@ -77,7 +77,10 @@ def make_polynomials(coefs: Float[Array, 'n d']) -> Callable:
     return (lambda x: jnp.array([f(x=xi) for f, xi in zip(polynomials, x)]))
 
 def make_internals(internals):
-    return lambda u: jnp.array([gi(ui) for gi, ui in zip(internals, u)])
+    idx = jnp.arange(len(internals))
+    def apply(u):
+        return jax.vmap(lambda i, ui: jax.lax.switch(i, internals, ui))(idx, u)
+    return apply
 
 def fit_internal_with_best_coefs(coefs, knots, degree):
     def g(x):

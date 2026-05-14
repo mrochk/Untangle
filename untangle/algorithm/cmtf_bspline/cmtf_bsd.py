@@ -26,15 +26,14 @@ def cmtf_bsd(
     if dof is None: dof = c.default_dof(N)
     if key is None: key = c.get_random_key() 
 
-    factors, _ = cmtf(
+    (W, V, H, R), (coefs, knots) = cmtf(
         X, Y, J, rank, niters, gamma, bspl_projection, 
         {'dof': dof, 'degree': degree, 'gamma': gamma},
         key, '|CMTF-BSD|',
     )
 
-    _, V, H, R = factors
-    internals = c.make_internals(c.fit_internals_with_smoothing_spline(X@V, H, R))
-    return Decoupling(factors, internals)
+    internals = c.make_internals(c.fit_internals_with_best_coefs(coefs, knots, degree))
+    return Decoupling((W, V, H, R), internals)
 
 def bspl_projection(
     H: Float[Array, 'N r'],
