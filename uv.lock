@@ -2,7 +2,8 @@ version = 1
 revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
-    "python_full_version >= '3.13'",
+    "python_full_version >= '3.14'",
+    "python_full_version == '3.13.*'",
     "python_full_version < '3.13'",
 ]
 
@@ -678,7 +679,6 @@ version = "0.0.0"
 source = { virtual = "." }
 dependencies = [
     { name = "beartype" },
-    { name = "bsplx" },
     { name = "jax" },
     { name = "jaxtyping" },
     { name = "matplotlib" },
@@ -694,7 +694,6 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "beartype", specifier = ">=0.22.9" },
-    { name = "bsplx", editable = "bsplx" },
     { name = "jax", specifier = ">=0.9.0.1" },
     { name = "jaxtyping", specifier = ">=0.3.9" },
     { name = "matplotlib", specifier = ">=3.10.8" },

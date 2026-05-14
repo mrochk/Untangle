@@ -70,11 +70,15 @@ def vandermonde_diag(X, d: int):
 ### wrappers for least squares funcs
 
 @jax.jit
-def lstsq(X, Y): return jnp.linalg.lstsq(X, Y)[0].T
+def lstsq(X, Y, ridge: float = 1e-8):
+    n = X.shape[1]
+    X_aug = jnp.vstack([X, jnp.sqrt(ridge) * jnp.eye(n)])
+    Y_aug = jnp.vstack([Y, jnp.zeros((n, Y.shape[1]))])
+    return jnp.linalg.lstsq(X_aug, Y_aug)[0].T
 
 @jax.jit(static_argnames='gamma')
 @jaxtyped(typechecker=beartype)
-def cmtf_lstsq(X1, X2, Y1, Y2, gamma: float):
+def cmtf_lstsq(X1, X2, Y1, Y2, gamma: float, ridge: float = 1e-8):
     X = jnp.concatenate([X1, gamma*X2], axis=0)
     Y = jnp.concatenate([Y1, gamma*Y2], axis=0)
     return jnp.linalg.lstsq(X, Y)[0].T
@@ -109,3 +113,9 @@ def normalize_columns_V(W: Float[Array, 'n r'], V: Float[Array, 'm r']):
         return W, V
 
     return jax.lax.fori_loop(0, rank, _, (W, V))
+
+@jax.jit(static_argnames='n')
+def second_diff_matrix(n: int) -> Array:
+    D1 = jnp.diff(jnp.eye(n), axis=0)
+    D2 = jnp.diff(D1, axis=0)
+    return D2

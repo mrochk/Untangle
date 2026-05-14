@@ -1,6 +1,5 @@
 import jax, jax.numpy as jnp
 from numpy.polynomial import Polynomial
-
 from beartype import beartype
 from jaxtyping import jaxtyped, Array, Float
 

@@ -7,12 +7,12 @@ from untangle.utils import collect_information, function_error
 key  = jax.random.key(0)
 keys = jax.random.split(key, 10)
 
-def f(x):
-    a, b = x
-    return jnp.array([
-        2*a**3 + b**2 + 1,
-        3*b**2 + 2*a - 1,
-    ])
+#def f(x):
+    #a, b = x
+    #return jnp.array([
+        #2*a**3 + b**2 + 1,
+        #3*b**2 + 2*a - 1,
+    #])
 
 def f(x):
     a, b = x
@@ -22,10 +22,7 @@ def f(x):
     ])
 
 N = 50
-niters = 20
-dof = N//2
-
-X_test, _, _ = collect_information(f, N, jax.random.key(42))
+X_test, _, _ = collect_information(f, N, key)
 
 rank = 4
 
@@ -38,12 +35,10 @@ for key in keys:
 
     info = (X, Y_scaled, J_scaled)
 
-    print(rank)
-
-    f_hat = scaler.unscale(cmtf_psd(*info, rank, niters=niters, key=key))
-    errors = function_error(f, f_hat, X_test)
+    f_hat = scaler.unscale(cmtf_psd(X, Y_scaled, J_scaled, rank, niters=10, key=key))
+    errors = function_error(f, f_hat, X)
     print('PSD Errors:', errors)
 
-    f_hat = scaler.unscale(cmtf_bsd(X, Y_scaled, J_scaled, rank, niters=niters, dof=dof, key=key))
+    f_hat = scaler.unscale(cmtf_bsd(X, Y_scaled, J_scaled, rank, niters=200, key=key))
     errors = function_error(f, f_hat, X_test)
     print('BSD Errors:', errors)

@@ -14,6 +14,7 @@ def collect_information(
     n_inputs: Optional[int] = None, 
     minval: float = 0.0, 
     maxval: float = 1.0,
+    X: Optional[Float[Array, 'N m']] = None,
 ) -> Tuple[Float[Array, 'N m'], Float[Array, 'N n'], Float[Array, 'n m N']]:
 
     '''
@@ -29,7 +30,7 @@ def collect_information(
     jacobian = jax.jit(jax.vmap(jax.jacobian(function)))
     function = jax.jit(jax.vmap(function))
 
-    X = jax.random.uniform(key, shape=(N, n_inputs), minval=minval, maxval=maxval)
+    if X is None: X = jax.random.uniform(key, shape=(N, n_inputs), minval=minval, maxval=maxval)
     Y = function(X)
     J = jacobian(X)
 

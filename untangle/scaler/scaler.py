@@ -1,5 +1,4 @@
 import jax, jax.numpy as jnp
-
 from jaxtyping import jaxtyped, Float, Array
 from beartype.typing import Callable, Tuple
 from beartype import beartype
@@ -35,7 +34,6 @@ class FunctionScaler:
         return f_unscaled
 
 class JacobianScaler:
-
     @jaxtyped(typechecker=beartype)
     def __init__(self, J: Float[Array, 'n m N'], Y: Float[Array, 'N n']):
         self.J = J

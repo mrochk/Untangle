@@ -1,25 +1,14 @@
 import jax, jax.numpy as jnp
 import optax
 
-from tqdm import tqdm
 from jaxtyping import jaxtyped, Float, Array
-from beartype import beartype
 from beartype.typing import Tuple, Optional
+from beartype import beartype
 
+from untangle.algorithm._cmtf import cmtf
 from untangle.algorithm import Decoupling
-from untangle.utils import cpd_error
-from untangle import _ops as ops
-from untangle._common import (
-    get_random_key,
-    make_log,
-    bspline_project,
-    fit_internals, 
-    initialize,
-    make_internals, 
-    determine_knots,
-    get_design_matrix,
-    get_design_dmatrix,
-)
+from untangle import _ops as ops 
+from untangle._common import *
 
 @jaxtyped(typechecker=beartype)
 def cmtf_psd(
@@ -31,91 +20,69 @@ def cmtf_psd(
     gamma: float = 0.1,
     dof: Optional[int] = None,
     degree: int = 3,
-    verbose: int = 0,
     key: Optional[Array] = None,
 ) -> Decoupling:
 
     N = X.shape[0]
-
+    if dof is None: dof = default_dof(N)
     if key is None: key = get_random_key()
-    if dof is None: dof = max(min([2*int(jnp.sqrt(N)), N//2]), 1)
 
-    prefix = '|CMTF-PSD|'
-    log = make_log(verbose, prefix)
+    projection_params = {'dof': dof, 'degree': degree, 'gamma': gamma}
 
-    best_errors = []
+    factors, out_proj = cmtf(
+        X, Y, J, rank, niters, gamma,
+        pspl_projection, projection_params,
+        key, '|CMTF-PSD|',
+    )
 
-    W, V, H, R = initialize(J, rank, key, with_R=True)
+    _, coefs, knots = out_proj
+    internals = make_internals(fit_internals_with_best_coefs(coefs, knots, degree))
+    return Decoupling(factors, internals)
 
-    J0 = ops.unfold_kolda(J, 0).T
-    J1 = ops.unfold_kolda(J, 1).T
-    J2 = ops.unfold_kolda(J, 2).T
-
-    log_lam_init = jnp.zeros((rank,))
-
-    bar = tqdm(range(niters), desc=prefix)
-
-    for iteration in bar:
-        W = ops.cmtf_lstsq(ops.khatri_rao(H, V), R, J0, Y, gamma)
-        V = ops.lstsq(ops.khatri_rao(H, W), J1)
-        W, V = ops.normalize_columns_V(W, V)
-
-        H = ops.lstsq(ops.khatri_rao(V, W), J2)
-        R = ops.lstsq(W, Y.T)
-
-        Z = X @ V
-        H, R, log_lam_init = psplines_projection(H, R, Z, dof, degree, gamma, log_lam_init)
-
-        error = cpd_error(J, (W, V, H))
-
-        if iteration == 0 or error < best_error:
-            best_error = error
-            best_iter = iteration
-            best = (W, V, H, R)
-
-        bar.set_postfix_str(f'error={error:.4f}, best={best_error:.4f} ({best_iter})')
-        log(f'Iteration [{iteration+1} / {niters}]: error = {error:.4f}, best = {best_error:.4f}')
-        best_errors.append(best_error)
-
-    log(f'Returning best result with error = {best_error:.4f}')
-
-    W, V, H, R = best
-    Z = X @ V
-
-    internals = make_internals(fit_internals(Z, H, R))
-
-    return Decoupling(best, internals)
-
-def psplines_projection(
+def pspl_projection(
     H: Float[Array, 'N r'],
     R: Float[Array, 'N r'],
-    U: Float[Array, 'N r'],
-    dof: int, 
-    degree: int,
-    gamma: float,
-    log_lam_init,
+    Z: Float[Array, 'N r'],
+    out, dof: int, degree: int, gamma: float,
 ) -> Tuple[Float[Array, 'N r'], Float[Array, 'N r']]:
 
-    log_lam_out = []
+    rank = H.shape[1]
+
+    lam_in = jnp.zeros(rank) if out is None else out[0]
+    lam_out = []
+
+    coefs_out = []
+    knots_out = []
 
     for rank in range(H.shape[1]):
-        u, h, r = U[:, rank], H[:, rank], R[:, rank]
+        z, h, r = Z[:, rank], H[:, rank], R[:, rank]
 
-        knots = determine_knots(u, dof, degree, 'even')
-        B  = get_design_matrix(u, knots, degree)
-        dB = get_design_dmatrix(u, knots, degree)
+        is_degenerate = (jnp.max(z) - jnp.min(z)) < 1e-6
 
-        n_basis = B.shape[1]
-        D = second_diff_matrix(n_basis)
+        if is_degenerate:
+            print(f'{rank} is degenerate')
+            H = H.at[:, rank].set(jnp.zeros_like(H[:, rank]))
+            R = R.at[:, rank].set(jnp.zeros_like(R[:, rank]))
+            lam_out.append(lam_in[rank])
+            coefs_out.append(None)
+            knots_out.append(None)
+            continue
+
+        knots = determine_knots(z, dof, degree, 'even')
+        B  = get_design_matrix(z, knots, degree)
+        dB = get_design_dmatrix(z, knots, degree)
+
+        n_basis = dB.shape[1]
+        D = ops.second_diff_matrix(n_basis)
 
         A = jnp.vstack([dB, gamma * B])
         y = jnp.concatenate([h, gamma * r])
 
-        log_lam = gcv_lbfgs(A, y, D, n=len(u), log_lam_init=log_lam_init[rank])
+        log_lam = gcv_lbfgs(A, y, D, n=len(z), log_lam_init=lam_in[rank])
 
         lam = 10**log_lam
 
-        log_lam_out.append(log_lam)
+        lam_out.append(log_lam)
 
         A = jnp.vstack([A, lam * D])
         y = jnp.concatenate([y, jnp.zeros(D.shape[0])])
@@ -123,13 +90,12 @@ def psplines_projection(
 
         H, R = bspline_project(rank, coefs, B, dB, H, R)
 
-    return H, R, jnp.array(log_lam_out)
+        g_coefs = jnp.linalg.lstsq(B, R[:, rank])[0]
+        coefs_out.append(g_coefs)
+        knots_out.append(knots)
 
-@jax.jit(static_argnames='n')
-def second_diff_matrix(n: int) -> Array:
-    D1 = jnp.diff(jnp.eye(n), axis=0)
-    D2 = jnp.diff(D1, axis=0)
-    return D2
+    out = (jnp.array(lam_out), coefs_out, knots_out)
+    return H, R, out
 
 @jax.jit
 def gcv_score(log_lam: Array, A: Array, y: Array, D: Array, n: int) -> Array:
@@ -170,7 +136,7 @@ def gcv_lbfgs(
     n_restarts: int = 5,
 ) -> Array:
 
-    log_lam_inits = jnp.linspace(-6, 4, n_restarts) if log_lam_init == 0 else [log_lam_init]
+    log_lam_inits = jnp.linspace(-6, 4, n_restarts) if float(log_lam_init) == 0.0 else [log_lam_init]
 
     @jax.jit
     def run_lbfgs(log_lam_init: Array) -> Tuple[Array, Array]:
@@ -208,9 +174,8 @@ def gcv_lbfgs(
     for log_lam_init in log_lam_inits:
         log_lam, score = run_lbfgs(log_lam_init)
         if jnp.isnan(log_lam): log_lam = 0.0
-        #print(log_lam)
         if score < best_score:
-            best_score   = score
+            best_score = score
             best_log_lam = log_lam
 
     return best_log_lam

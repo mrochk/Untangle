@@ -5,6 +5,7 @@ from bsplx import design_matrix, design_dmatrix, bspline_inference
 from functools import partial
 from beartype import beartype 
 from beartype.typing import Callable
+from scipy.interpolate import make_smoothing_spline
 
 from untangle import _ops as ops
 
@@ -78,46 +79,46 @@ def make_polynomials(coefs: Float[Array, 'n d']) -> Callable:
 def make_internals(internals):
     return lambda u: jnp.array([gi(ui) for gi, ui in zip(internals, u)])
 
-from scipy.interpolate import make_smoothing_spline
+def fit_internal_with_best_coefs(coefs, knots, degree):
+    def g(x):
+        B = get_design_matrix(jnp.atleast_1d(x), knots, degree)
+        return jnp.squeeze(B @ coefs)
+    return g
 
-def fit_internal(z_s, h_s, r_s):
-    try:
-        dss = make_smoothing_spline(z_s, h_s)
+def fit_internals_with_best_coefs(coefs_list, knots_list, degree):
+    internals = []
+    for coefs, knots in zip(coefs_list, knots_list):
+        if coefs is None:
+            internals.append(lambda x: jnp.zeros_like(x))
+            continue
+        internals.append(fit_internal_with_best_coefs(coefs, knots, degree))
+    return internals
+
+def fit_internal_with_smoothing_spline(z_s, h_s, r_s):
+    try: dss = make_smoothing_spline(z_s, h_s)
     except:
-        try:
-            print(z_s)
-            z_s, idx = jnp.unique(z_s, True)
-            h_s = h_s[idx]
-            r_s = r_s[idx]
-            dss = make_smoothing_spline(z_s, h_s)
-        except:
-            def g(x): return jnp.zeros_like(x)
-            return g
+        def g(x): return jnp.zeros_like(x)
+        return g
         
     ss = dss.antiderivative()
-
     bias = jnp.median(r_s - ss(z_s))
-    c = jnp.array(ss.c)
     knots = jnp.array(ss.t)
+    c = jnp.array(ss.c)
     d = ss.k
 
-    # ensure n_basis consistency: c must have len(knots) - d - 1 coefficients
     n_basis = len(knots) - d - 1
     c = c[:n_basis]
 
     def g(x): return bspline_inference(x, c, knots, d) + bias
     return g
 
-def fit_internals(Z, H, R):
+def fit_internals_with_smoothing_spline(Z, H, R):
     internals = []
-
     for rank in range(Z.shape[1]):
         z, h, r = Z[:, rank], H[:, rank], R[:, rank]
         idx = jnp.argsort(z)
         z_s, h_s, r_s = z[idx], h[idx], r[idx]
-
-        g = fit_internal(z_s, h_s, r_s)
-
+        g = fit_internal_with_smoothing_spline(z_s, h_s, r_s)
         internals.append(g)
 
     return internals
@@ -174,3 +175,8 @@ def _closest(knot, u):
 
     _, closest_point = jax.lax.fori_loop(0, len(u), forloop, (jnp.inf, u[0]))
     return closest_point
+
+# hyperparameters
+
+def default_dof(N):
+    return max(min([2*int(jnp.sqrt(N)), N//2]), 1)
