@@ -6,10 +6,10 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "jax>=0.9.0.1",
-    "optax>=0.2.8",
     "jaxtyping>=0.3.9",
     "beartype>=0.22.9",
     "tqdm>=4.67.3",
+    "bsplx>=0.1.1",
 ]
 
 authors = [{ name = "Maxime Rochkoulets", email = "mrochkoulets@gmail.com" }]
@@ -26,12 +26,10 @@ include = ["untangle*"]
 [tool.uv.workspace]
 members = [
     ".",
-    "bsplx",
 ]
 
 [tool.uv.sources]
 untangle = { workspace = true }
-bsplx = { workspace = true }
 
 [dependency-groups]
 dev = [

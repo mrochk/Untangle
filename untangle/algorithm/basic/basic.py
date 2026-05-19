@@ -23,7 +23,7 @@ def basic_decoupling(
     
     log = make_log(verbose, '|BASIC-DECOUPLING|')
 
-    factors, weights, _ = cpd(J, rank, maxiters, key, **cpd_kwargs)
+    factors, weights, errors = cpd(J, rank, maxiters, key, **cpd_kwargs)
     W, V, H = factors
 
     W = W * weights
@@ -33,7 +33,7 @@ def basic_decoupling(
 
     internals = make_polynomials(coefs)
 
-    return Decoupling((W, V, H), internals)
+    return Decoupling((W, V, H), internals), errors[-1]
 
 def _find_internals_coefs(
     X: Float[Array, 'N m'],

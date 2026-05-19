@@ -4,4 +4,5 @@ from .utils import (
     get_random_key,
     function_error,
     cpd_error,
+    best_of_n,
 )

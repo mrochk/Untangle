@@ -57,9 +57,9 @@ def solve_cpd_subproblem(
 ):
     assert 0 <= mode <= 2
     match mode:
-        case 0: return ops.cpd_als_solve(unfolded, H, V)
-        case 1: return ops.cpd_als_solve(unfolded, H, W)
-        case 2: return ops.cpd_als_solve(unfolded, V, W)
+        case 0: return ops.cpd_factor_solve(unfolded, H, V)
+        case 1: return ops.cpd_factor_solve(unfolded, H, W)
+        case 2: return ops.cpd_factor_solve(unfolded, V, W)
 
 ### stuff related to fitting internals
 

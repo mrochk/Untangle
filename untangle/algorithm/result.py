@@ -11,7 +11,8 @@ class Decoupling:
         assert factors[0].shape[-1] == factors[1].shape[-1] == factors[2].shape[-1]
 
         self.factors = factors
-        self.W, self.V, self.H, self.R = factors
+        if len(factors) == 4: self.W, self.V, self.H, self.R = factors
+        else: self.W, self.V, self.H = factors
         self.internals = internals
 
     def __call__(self, x: ArrayLike) -> ArrayLike:

@@ -22,7 +22,7 @@ def ctd_polynomial(
 
     log = make_log(verbose, '|CTD-POLYNOMIAL|')
 
-    factors, dcoefs, _ = cpd_polynomial_constraint(X, J, rank, degree, maxiters, key, verbose=verbose, **cpd_kwargs)
+    factors, dcoefs, errors = cpd_polynomial_constraint(X, J, rank, degree, maxiters, key, verbose=verbose, **cpd_kwargs)
     W, V, H = factors
 
     Z = X @ V
@@ -31,7 +31,7 @@ def ctd_polynomial(
 
     internals = make_polynomials(coefs)
 
-    return Decoupling(factors, internals)
+    return Decoupling(factors, internals), errors[-1]
 
 def _integrate(dcoefs, Z, Y, W):
     assert dcoefs.shape[1] == W.shape[1]
