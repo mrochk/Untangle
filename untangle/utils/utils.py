@@ -92,3 +92,15 @@ def best_of_n(
         bar.set_postfix_str(f'error={error:.4f}, best={min_error:.4f}')
 
     return (min_decoupling, min_key, min_error)
+
+def best_of_5(
+    algorithm: Callable,
+    key: Optional[Array] = None,
+) -> Tuple:
+    return best_of_n(algorithm, 5, key) 
+
+def best_of_10(
+    algorithm: Callable,
+    key: Optional[Array] = None,
+) -> Tuple:
+    return best_of_n(algorithm, 10, key) 

@@ -15,4 +15,3 @@ J_scaled, Y_scaled = scaler.scale()
 decoupling = scaler.unscale(cmtf_bsd(X, Y_scaled, J_scaled, rank=3))
 
 print(f'Errors: {function_error(f, decoupling, X)}')
-

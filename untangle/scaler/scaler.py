@@ -55,4 +55,4 @@ class JacobianScaler:
 
     @jaxtyped(typechecker=beartype)
     def unscale_output(self, output: Float[Array, 'n']) -> Float[Array, 'n']:
-        return (output.T / self.factors).T
+        return output / self.factors

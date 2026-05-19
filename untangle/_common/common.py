@@ -67,7 +67,7 @@ def solve_cpd_subproblem(
 def bspline_project(i, coefs, B, dB, H, R):
     H = H.at[:, i].set(dB @ coefs)
     R = R.at[:, i].set(B @ coefs)
-    return H, R
+    return (H, R)
 
 def make_polynomial(coefs: Float[Array, 'd']) -> Callable:
     return partial(jnp.polyval, p=jnp.flip(coefs))
@@ -182,4 +182,4 @@ def _closest(knot, u):
 # hyperparameters
 
 def default_dof(N):
-    return max(min([2*int(jnp.sqrt(N)), N//2]), 1)
+    return max(min([2*int(jnp.sqrt(N))+1, N//2]), 1)
