@@ -1,6 +1,6 @@
 import jax, jax.numpy as jnp
 from beartype import beartype
-from beartype.typing import Optional
+from beartype.typing import Optional, Tuple
 from jaxtyping import jaxtyped, Array, Float
 
 from untangle.algorithm import Decoupling
@@ -19,7 +19,7 @@ def basic_decoupling(
     verbose: int = 0,
     key: Optional[Array] = None,
     **cpd_kwargs,
-) -> Decoupling:
+) -> Tuple[Decoupling, Array]:
     
     log = make_log(verbose, '|BASIC-DECOUPLING|')
 

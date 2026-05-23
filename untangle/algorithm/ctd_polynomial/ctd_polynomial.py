@@ -1,6 +1,7 @@
 import jax, jax.numpy as jnp
 from numpy.polynomial import Polynomial
 from beartype import beartype
+from beartype.typing import Tuple
 from jaxtyping import jaxtyped, Array, Float
 
 from untangle.algorithm import Decoupling
@@ -18,19 +19,11 @@ def ctd_polynomial(
     verbose: int = 0,
     key: Array = None,
     **cpd_kwargs,
-) -> Decoupling:
-
-    log = make_log(verbose, '|CTD-POLYNOMIAL|')
-
+) -> Tuple[Decoupling, Array]:
     factors, dcoefs, errors = cpd_polynomial_constraint(X, J, rank, degree, maxiters, key, verbose=verbose, **cpd_kwargs)
-    W, V, H = factors
-
-    Z = X @ V
-
-    coefs = _integrate(dcoefs, Z, Y, W)
-
+    W, V, _ = factors
+    coefs = _integrate(dcoefs, X @ V, Y, W)
     internals = make_polynomials(coefs)
-
     return Decoupling(factors, internals), errors[-1]
 
 def _integrate(dcoefs, Z, Y, W):

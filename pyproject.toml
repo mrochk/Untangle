@@ -1,5 +1,5 @@
 [project]
-name = "tensor-decoupling"
+name = "decoupling"
 version = "0.0.0"
 description = "Decoupling multivariate functions using tensor decompositions, in Jax."
 readme = "README.md"

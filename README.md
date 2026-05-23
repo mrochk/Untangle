@@ -10,17 +10,23 @@ This project was built using `uv` (https://docs.astral.sh/uv).
 
 You can easily get `untangle` from PyPI:
 ```bash
-pip install tensor-decoupling # (untangle was already taken...)
+pip install decoupling # ("untangle" was already taken...)
 ```
 Otherwise, for a local `uv` installation:
 ```bash
 git clone git@github.com:mrochk/untangle.git
-uv add untangle
+uv add ./untangle # or pip install ./untangle
 ```
 
 ### Algorithms
 
-- Basic Tensor Decoupling: `untangle/algorithm/basic`
-- Polynomial Constrained Tensor Decoupling: `untangle/algorithm/ctd_polynomial`
-- CMTF-BSD: `untangle/algorithm/cmtf_bspline`
-- CMTF-PSD: `untangle/algorithm/cmtf_pspline`
+- Polynomial Tensor Decoupling: `untangle/algorithm/basic` [Dreesen, Ishteva & Schoukens (2015)]
+- Constrained Polynomial TD: `untangle/algorithm/ctd_polynomial` [Hollander, (2017)]
+- CMTF B-Spline Decoupling: `untangle/algorithm/cmtf_bspline` [De Jonghe & Ishteva (2025)]
+- CMTF P-Spline Decoupling: `untangle/algorithm/cmtf_pspline`
+
+### Testing
+
+```bash
+uv run -m unittest discover testing -v # or ./test.sh
+```
