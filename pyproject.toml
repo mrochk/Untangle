@@ -1,5 +1,5 @@
 [project]
-name = "untangle"
+name = "tensor-decoupling"
 version = "0.0.0"
 description = "Decoupling multivariate functions using tensor decompositions, in Jax."
 readme = "README.md"
@@ -24,14 +24,7 @@ where = ["."]
 include = ["untangle*"]
 
 [tool.uv.workspace]
-members = [
-    ".",
-]
+members = ["."]
 
 [tool.uv.sources]
 untangle = { workspace = true }
-
-[dependency-groups]
-dev = [
-    "untangle",
-]
