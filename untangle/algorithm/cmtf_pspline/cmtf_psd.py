@@ -1,13 +1,12 @@
 import jax, jax.numpy as jnp
-import optax
-
 from jaxtyping import jaxtyped, Float, Array
-from beartype.typing import Tuple, Optional
+from beartype.typing import Tuple, Optional, Any
 from beartype import beartype
+import warnings
 
 from untangle.algorithm._cmtf import cmtf
-from untangle.algorithm import Decoupling
 from untangle import _ops as ops 
+from untangle.algorithm import Decoupling
 from untangle._common import *
 
 @jaxtyped(typechecker=beartype)
@@ -19,163 +18,108 @@ def cmtf_psd(
     niters: int = 100,
     gamma: float = 0.1,
     dof: Optional[int] = None,
+    lam_nvalues: int = 100,
+    lam_nvalues_init: int = 1000,
     degree: int = 3,
     key: Optional[Array] = None,
-) -> Decoupling:
+    show_progress: Optional[bool] = True,
+) -> Tuple[Decoupling, Array]:
 
-    N = X.shape[0]
-    if dof is None: dof = default_dof(N)
+    if dof is None: dof = default_dof(X.shape[0])
     if key is None: key = get_random_key()
 
-    projection_params = {'dof': dof, 'degree': degree, 'gamma': gamma}
-
-    factors, out_proj = cmtf(
-        X, Y, J, rank, niters, gamma,
-        pspl_projection, projection_params,
-        key, '|CMTF-PSD|',
+    proj_params = dict(
+        dof=dof, 
+        gamma=gamma, 
+        degree=degree, 
+        lam_nvalues=lam_nvalues, 
+        lam_nvalues_init=lam_nvalues_init,
     )
 
-    _, coefs, knots = out_proj
-    internals = make_internals(fit_internals_with_best_coefs(coefs, knots, degree))
-    return Decoupling(factors, internals)
+    factors, (_, coefs, knots), error = cmtf(
+        X, Y, J, rank, niters, gamma,
+        pspl_project, proj_params,
+        key, '|CMTF-PSD|',
+        show_progress=show_progress,
+    )
 
-def pspl_projection(
+    internals = fit_internals_with_best_coefs(coefs, knots, degree)
+    return (Decoupling(factors, make_internals(internals)), error)
+
+def pspl_project(
     H: Float[Array, 'N r'],
     R: Float[Array, 'N r'],
     Z: Float[Array, 'N r'],
-    out, dof: int, degree: int, gamma: float,
+    out: Any, dof: int, degree: int, gamma: float,
+    lam_nvalues: int,
+    lam_nvalues_init: int,
 ) -> Tuple[Float[Array, 'N r'], Float[Array, 'N r']]:
 
-    rank = H.shape[1]
-
-    lam_in = jnp.zeros(rank) if out is None else out[0]
-    lam_out = []
-
-    coefs_out = []
-    knots_out = []
+    lam_in = [None for _ in range(H.shape[1])] if out is None else out[0]
+    (lam_out, coefs_out, knots_out) = [], [], []
 
     for rank in range(H.shape[1]):
-        z, h, r = Z[:, rank], H[:, rank], R[:, rank]
+        (z, h, r) = Z[:, rank], H[:, rank], R[:, rank]
 
         is_degenerate = (jnp.max(z) - jnp.min(z)) < 1e-6
 
         if is_degenerate:
-            print(f'{rank} is degenerate')
+            warnings.warn(f'Internal {rank} is degenerate (max - min < 1e-6).')
             H = H.at[:, rank].set(jnp.zeros_like(H[:, rank]))
             R = R.at[:, rank].set(jnp.zeros_like(R[:, rank]))
-            lam_out.append(lam_in[rank])
-            coefs_out.append(None)
-            knots_out.append(None)
+            lam_out.append(lam_in[rank]); coefs_out.append(None); knots_out.append(None)
             continue
 
         knots = determine_knots(z, dof, degree, 'even')
-        B  = get_design_matrix(z, knots, degree)
+        B = get_design_matrix(z, knots, degree)
         dB = get_design_dmatrix(z, knots, degree)
+        D = ops.second_diff_matrix(B.shape[1])
+        A = jnp.vstack([dB, jnp.sqrt(gamma)*B])
+        y = jnp.concatenate([h, jnp.sqrt(gamma)*r])
+        ll = gcv_grid_search(A, y, D, len(z), lam_in[rank], lam_nvalues_init, lam_nvalues)
 
-        n_basis = dB.shape[1]
-        D = ops.second_diff_matrix(n_basis)
+        lam_out.append(ll)
+        lam = 10**ll
 
-        A = jnp.vstack([dB, gamma * B])
-        y = jnp.concatenate([h, gamma * r])
-
-        log_lam = gcv_lbfgs(A, y, D, n=len(z), log_lam_init=lam_in[rank])
-
-        lam = 10**log_lam
-
-        lam_out.append(log_lam)
-
-        A = jnp.vstack([A, lam * D])
+        A = jnp.concatenate([A, jnp.sqrt(lam) * D])
         y = jnp.concatenate([y, jnp.zeros(D.shape[0])])
-        coefs = jnp.linalg.lstsq(A, y)[0]
+        coefs = ops.lstsq(A, y).T
+        (H, R) = bspline_project(rank, coefs, B, dB, H, R)
 
-        H, R = bspline_project(rank, coefs, B, dB, H, R)
-
-        g_coefs = jnp.linalg.lstsq(B, R[:, rank])[0]
-        coefs_out.append(g_coefs)
+        # return the coefs for fitting the internals later
+        coefs_out.append(ops.lstsq(B, R[:, rank]).T)
         knots_out.append(knots)
 
-    out = (jnp.array(lam_out), coefs_out, knots_out)
-    return H, R, out
+    return H, R, (jnp.array(lam_out), coefs_out, knots_out)
 
-@jax.jit
-def gcv_score(log_lam: Array, A: Array, y: Array, D: Array, n: int) -> Array:
-    lam = 10.0 ** log_lam
-
-    A_aug = jnp.vstack([A, lam * D])
-    y_aug = jnp.concatenate([y, jnp.zeros(D.shape[0])])
-
-    coefs     = jnp.linalg.lstsq(A_aug, y_aug)[0]
-    residuals = y_aug[:len(y)] - A @ coefs
-    rss       = jnp.sum(residuals ** 2)
-
-    Q, _ = jnp.linalg.qr(A_aug)
-    df   = jnp.trace(Q[:len(y)] @ Q[:len(y)].T)
-
-    gcv = (n * rss) / (n - df) ** 2
-    return gcv
-
-@jax.jit
-def gcv(A: Array, y: Array, D: Array, n: int) -> Array:
-    log_lams_coarse = jnp.linspace(-10, 10, 500)
-    scores   = jax.vmap(lambda ll: gcv_score(ll, A, y, D, n))(log_lams_coarse)
-    best = log_lams_coarse[jnp.argmin(scores)]
-
-    log_lams_fine = jnp.linspace(best-1, best+1, 500)
-    scores = jax.vmap(lambda ll: gcv_score(ll, A, y, D, n))(log_lams_fine)
-    best = log_lams_fine[jnp.argmin(scores)]
-
-    return 10**best
-
-def gcv_lbfgs(
-    A: Array,
-    y: Array,
-    D: Array,
-    n: int,
-    log_lam_init,
-    lbfgs_iters: int = 10,
-    n_restarts: int = 5,
+def gcv_grid_search(
+    X: Array, 
+    y: Array, 
+    D: Array, 
+    n: int, 
+    _ll: Optional[float],
+    nvalues_init: int,
+    nvalues: int,
 ) -> Array:
 
-    log_lam_inits = jnp.linspace(-6, 4, n_restarts) if float(log_lam_init) == 0.0 else [log_lam_init]
+    y = jnp.concatenate([y, jnp.zeros(D.shape[0])])
 
-    @jax.jit
-    def run_lbfgs(log_lam_init: Array) -> Tuple[Array, Array]:
-        optimizer = optax.lbfgs()
+    if _ll is None:
+        lls_init = jnp.linspace(-6, 3, nvalues_init)
+        scores = jax.vmap(lambda ll: gcv_score(ll, X, D, y, n))(lls_init)
+        _ll = lls_init[jnp.argmin(scores)]
 
-        params = {'log_lam': log_lam_init}
+    lls = jnp.linspace(_ll-1, _ll+1, nvalues)
+    scores = jax.vmap(lambda ll: gcv_score(ll, X, D, y, n))(lls)
+    return lls[jnp.argmin(scores)]
 
-        opt_state = optimizer.init(params)
-
-        loss_and_grad = jax.value_and_grad(
-            lambda p: gcv_score(p['log_lam'], A, y, D, n)
-        )
-
-        def step(carry, _):
-            params, opt_state = carry
-            loss, grads = loss_and_grad(params)
-            updates, opt_state = optimizer.update(
-                grads, opt_state, params,
-                value=loss,
-                grad=grads,
-                value_fn=lambda p: gcv_score(p['log_lam'], A, y, D, n),
-            )
-            params = optax.apply_updates(params, updates)
-            return (params, opt_state), loss
-
-        (params_final, _), losses = jax.lax.scan(
-            step, (params, opt_state), None, length=lbfgs_iters
-        )
-
-        return params_final['log_lam'], losses[-1]
-
-    best_log_lam = log_lam_inits[0]
-    best_score   = jnp.inf
-
-    for log_lam_init in log_lam_inits:
-        log_lam, score = run_lbfgs(log_lam_init)
-        if jnp.isnan(log_lam): log_lam = 0.0
-        if score < best_score:
-            best_score = score
-            best_log_lam = log_lam
-
-    return best_log_lam
+@jax.jit(static_argnames='n')
+def gcv_score(ll: Array, X: Array, D: Array, y: Array, n: int) -> Array:
+    lam = 10.0 ** ll
+    X = jnp.concatenate([X, jnp.sqrt(lam)*D])
+    coefs = ops.lstsq(X, y).T
+    residuals = y[:2*n] - X[:2*n] @ coefs
+    rss = jnp.sum(residuals ** 2)
+    Q = jnp.linalg.qr(X)[0]
+    df = jnp.trace(Q[:2*n] @ Q[:2*n].T)
+    return (n * rss) / (n - df)**2

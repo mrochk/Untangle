@@ -20,7 +20,7 @@ def khatri_rao(A: Float[Array, 'm k'], B: Float[Array, 'n k']) -> Float[Array, '
     return (A[:, None, :] * B[None, :, :]).reshape(m*n, k)
 
 @jax.jit
-def cpd_als_solve(unfolded, A, B):
+def cpd_factor_solve(unfolded, A, B):
     KR = khatri_rao(A, B)
     CC = A.T @ A
     BB = B.T @ B
@@ -70,11 +70,8 @@ def vandermonde_diag(X, d: int):
 ### wrappers for least squares funcs
 
 @jax.jit
-def lstsq(X, Y, ridge: float = 1e-8):
-    n = X.shape[1]
-    X_aug = jnp.vstack([X, jnp.sqrt(ridge) * jnp.eye(n)])
-    Y_aug = jnp.vstack([Y, jnp.zeros((n, Y.shape[1]))])
-    return jnp.linalg.lstsq(X_aug, Y_aug)[0].T
+def lstsq(X, Y):
+    return jnp.linalg.lstsq(X, Y)[0].T
 
 @jax.jit(static_argnames='gamma')
 @jaxtyped(typechecker=beartype)

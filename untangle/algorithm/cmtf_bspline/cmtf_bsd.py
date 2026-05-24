@@ -20,21 +20,21 @@ def cmtf_bsd(
     gamma: float = 0.1,
     degree: int = 3,
     key: Optional[Array] = None,
-) -> Decoupling:
+    show_progress: bool = True,
+) -> Tuple[Decoupling, Array]:
 
     N = X.shape[0]
     if dof is None: dof = c.default_dof(N)
     if key is None: key = c.get_random_key() 
 
-    factors, _ = cmtf(
+    (W, V, H, R), (coefs, knots), error = cmtf(
         X, Y, J, rank, niters, gamma, bspl_projection, 
         {'dof': dof, 'degree': degree, 'gamma': gamma},
-        key, '|CMTF-BSD|',
+        key, '|CMTF-BSD|', show_progress,
     )
 
-    _, V, H, R = factors
-    internals = c.make_internals(c.fit_internals_with_smoothing_spline(X@V, H, R))
-    return Decoupling(factors, internals)
+    internals = c.make_internals(c.fit_internals_with_best_coefs(coefs, knots, degree))
+    return Decoupling((W, V, H, R), internals), error
 
 def bspl_projection(
     H: Float[Array, 'N r'],

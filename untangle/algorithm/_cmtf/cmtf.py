@@ -19,8 +19,8 @@ def cmtf(
     projection_params: dict,
     key: Array,
     prefix: str,
+    show_progress: bool,
 ):
-
     best_errors = []
 
     W, V, H, R = initialize(J, rank, key, with_R=True)
@@ -29,7 +29,7 @@ def cmtf(
     J1 = ops.unfold_kolda(J, 1).T
     J2 = ops.unfold_kolda(J, 2).T
 
-    bar = tqdm(range(niters), desc=f'{prefix} (rank={rank})')
+    bar = tqdm(range(niters), desc=f'{prefix} (rank={rank})', disable=not show_progress)
 
     out_proj = None
 
@@ -54,4 +54,4 @@ def cmtf(
         bar.set_postfix_str(f'error={error:.4f}, best={best_error:.4f} ({best_iter})')
         best_errors.append(best_error)
 
-    return best, best_out_proj
+    return best, best_out_proj, best_error

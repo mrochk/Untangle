@@ -1,6 +1,6 @@
 import jax, jax.numpy as jnp
 from beartype import beartype
-from beartype.typing import Optional
+from beartype.typing import Optional, Tuple
 from jaxtyping import jaxtyped, Array, Float
 
 from untangle.algorithm import Decoupling
@@ -19,11 +19,11 @@ def basic_decoupling(
     verbose: int = 0,
     key: Optional[Array] = None,
     **cpd_kwargs,
-) -> Decoupling:
+) -> Tuple[Decoupling, Array]:
     
     log = make_log(verbose, '|BASIC-DECOUPLING|')
 
-    factors, weights, _ = cpd(J, rank, maxiters, key, **cpd_kwargs)
+    factors, weights, errors = cpd(J, rank, maxiters, key, **cpd_kwargs)
     W, V, H = factors
 
     W = W * weights
@@ -33,7 +33,7 @@ def basic_decoupling(
 
     internals = make_polynomials(coefs)
 
-    return Decoupling((W, V, H), internals)
+    return Decoupling((W, V, H), internals), errors[-1]
 
 def _find_internals_coefs(
     X: Float[Array, 'N m'],

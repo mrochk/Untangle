@@ -6,11 +6,12 @@ from jaxtyping import jaxtyped, Array, Float
 from beartype import beartype 
 from beartype.typing import Tuple, Optional 
 
-from untangle.utils import get_random_key, cpd_error
+from untangle.utils import cpd_error
 from untangle._ops import unfold_kolda, normalize_columns_simple
 from untangle._common import (
     make_log,
     initialize, 
+    get_random_key,
     solve_cpd_subproblem, 
     cpd_stopping_criterion, 
 )

@@ -1,4 +1,6 @@
 import jax, jax.numpy as jnp
+import tqdm as tqdm_module
+from tqdm import tqdm
 from jaxtyping import jaxtyped, Float, Array, ArrayLike
 from beartype.typing import Callable, Tuple, Optional
 from beartype import beartype
@@ -54,13 +56,51 @@ def cpd_error(
     _tensor = cpd_reconstruct(factors, weights)
     return jnp.linalg.norm(tensor - _tensor) / jnp.linalg.norm(tensor)
 
-def function_error(true_func: Callable, learned_func: Callable, X: ArrayLike) -> float:
-    assert callable(true_func) and callable(learned_func)
+def function_error(target: Callable, decoupling: Callable, X: ArrayLike) -> float:
+    assert callable(target) and callable(decoupling)
 
-    Y = jax.vmap(true_func)(X)
-    Y_learned = jax.vmap(learned_func)(X)
+    Y = jax.vmap(target)(X)
+    Y_learned = jax.vmap(decoupling)(X)
 
     top = jnp.sqrt(jnp.mean((Y - Y_learned)**2, axis=0))
     bot = jnp.sqrt(jnp.mean((Y - jnp.mean(Y, axis=0))**2, axis=0))
 
     return top / bot * 100
+
+def best_of_n(
+    algorithm: Callable,
+    n: int = 5, 
+    key: Optional[Array] = None,
+) -> Tuple:
+    assert n > 0
+
+    if key is None: key = get_random_key()
+
+    min_error = jnp.inf
+    min_key = None
+    min_decoupling = None
+
+    bar = tqdm(jax.random.split(key, n), desc=f'Returning best of {n} runs')
+    for k in bar:
+        decoupling, error = algorithm(key=k, show_progress=False)
+
+        if error < min_error:
+            min_decoupling = decoupling
+            min_error = error
+            min_key = k
+
+        bar.set_postfix_str(f'error={error:.4f}, best={min_error:.4f}')
+
+    return (min_decoupling, min_key, min_error)
+
+def best_of_5(
+    algorithm: Callable,
+    key: Optional[Array] = None,
+) -> Tuple:
+    return best_of_n(algorithm, 5, key) 
+
+def best_of_10(
+    algorithm: Callable,
+    key: Optional[Array] = None,
+) -> Tuple:
+    return best_of_n(algorithm, 10, key) 

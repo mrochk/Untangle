@@ -1,7 +1,7 @@
 [project]
-name = "untangle"
+name = "decoupling"
 version = "0.0.0"
-description = "Jax package for decoupling multivariate functions using tensor decompositions."
+description = "Decoupling multivariate functions using tensor decompositions, in Jax."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -9,8 +9,7 @@ dependencies = [
     "jaxtyping>=0.3.9",
     "beartype>=0.22.9",
     "tqdm>=4.67.3",
-    "matplotlib>=3.10.8",
-    "optax>=0.2.8",
+    "bsplx>=0.1.1",
 ]
 
 authors = [{ name = "Maxime Rochkoulets", email = "mrochkoulets@gmail.com" }]
@@ -25,16 +24,7 @@ where = ["."]
 include = ["untangle*"]
 
 [tool.uv.workspace]
-members = [
-    ".",
-    "bsplx",
-]
+members = ["."]
 
 [tool.uv.sources]
 untangle = { workspace = true }
-bsplx = { workspace = true }
-
-[dependency-groups]
-dev = [
-    "untangle",
-]

@@ -57,9 +57,9 @@ def solve_cpd_subproblem(
 ):
     assert 0 <= mode <= 2
     match mode:
-        case 0: return ops.cpd_als_solve(unfolded, H, V)
-        case 1: return ops.cpd_als_solve(unfolded, H, W)
-        case 2: return ops.cpd_als_solve(unfolded, V, W)
+        case 0: return ops.cpd_factor_solve(unfolded, H, V)
+        case 1: return ops.cpd_factor_solve(unfolded, H, W)
+        case 2: return ops.cpd_factor_solve(unfolded, V, W)
 
 ### stuff related to fitting internals
 
@@ -67,7 +67,7 @@ def solve_cpd_subproblem(
 def bspline_project(i, coefs, B, dB, H, R):
     H = H.at[:, i].set(dB @ coefs)
     R = R.at[:, i].set(B @ coefs)
-    return H, R
+    return (H, R)
 
 def make_polynomial(coefs: Float[Array, 'd']) -> Callable:
     return partial(jnp.polyval, p=jnp.flip(coefs))
@@ -77,7 +77,10 @@ def make_polynomials(coefs: Float[Array, 'n d']) -> Callable:
     return (lambda x: jnp.array([f(x=xi) for f, xi in zip(polynomials, x)]))
 
 def make_internals(internals):
-    return lambda u: jnp.array([gi(ui) for gi, ui in zip(internals, u)])
+    idx = jnp.arange(len(internals))
+    def apply(u):
+        return jax.vmap(lambda i, ui: jax.lax.switch(i, internals, ui))(idx, u)
+    return apply
 
 def fit_internal_with_best_coefs(coefs, knots, degree):
     def g(x):
@@ -179,4 +182,4 @@ def _closest(knot, u):
 # hyperparameters
 
 def default_dof(N):
-    return max(min([2*int(jnp.sqrt(N)), N//2]), 1)
+    return max(min([2*int(jnp.sqrt(N))+1, N//2]), 1)
