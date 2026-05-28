@@ -122,7 +122,7 @@ def main():
             axes[r].set_xticks([])
 
         plt.tight_layout()
-        plt.savefig(f'internals{rank}.png', dpi=300)
+        plt.savefig(f'internals.png', dpi=300)
         plt.close(fig)
 
         dparams = [V, W]
@@ -150,7 +150,7 @@ def main():
         doptim = optax.adam(learning_rate=1e-3)
         dstate = doptim.init(dparams)
 
-        @jax.jit
+        #@jax.jit
         def dstep(dparams, dstate, X, y):
             loss, grads = jax.value_and_grad(dcompute_loss)(dparams, X, y)
             updates, dstate = doptim.update(grads, dstate)
