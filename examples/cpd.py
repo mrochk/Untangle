@@ -1,5 +1,5 @@
 '''
-https://tensorly.org/dev/user_guide/tensor_decomposition.html
+Example from https://tensorly.org/dev/user_guide/tensor_decomposition.html
 '''
 
 import jax, jax.numpy as jnp

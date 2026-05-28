@@ -88,7 +88,7 @@ def main():
         best_decoupling = None
 
         for k in jax.random.split(key, ntries):
-            decoupling, error = algorithm.cmtf_psd(X, Y_scaled, J_scaled, rank, niters, key=k)
+            decoupling, _ = algorithm.cmtf_psd(X, Y_scaled, J_scaled, rank, niters, key=k)
 
             dparams = [decoupling.V, decoupling.W]
 
