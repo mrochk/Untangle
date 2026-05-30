@@ -32,7 +32,7 @@ def cpd_polynomial_constraint(
 ]:
     if key is None: key = get_random_key()
 
-    prefix = '|CPD-CONST| -> '
+    prefix = '|CPD-CONSTRAINED|'
     log = make_log(verbose, prefix)
 
     errors = []

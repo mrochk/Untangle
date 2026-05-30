@@ -31,7 +31,7 @@ def cpd(
 ]:
     if key is None: key = get_random_key()
 
-    prefix = '|CPD| -> '
+    prefix = '|CPD|'
     log = make_log(verbose, prefix)
 
     errors = []
