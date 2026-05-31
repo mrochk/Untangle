@@ -4,4 +4,9 @@ Here you will find some simple notebooks and Python scripts to showcase what you
 
 If you can't visualize the notebooks on GitHub, use https://nbviewer.org.
 
-You may start with the [`Introduction`](Introduction.ipynb) notebook.
+Current list of notebooks:
+- 1. [`Introduction`](1.%20Introduction.ipynb)
+- 2. [`Periodic`](2.%20Periodic.ipynb)
+- 3. ...
+
+And [`nb`](./nb) contains code for compressing a neural network trained on the MNIST dataset.
