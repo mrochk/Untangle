@@ -9,4 +9,4 @@ Current list of notebooks:
 - 2. [`Periodic`](2.%20Periodic.ipynb)
 - 3. ...
 
-And [`nb`](./nb) contains code for compressing a neural network trained on the MNIST dataset.
+And [`nn`](./nn) contains code for compressing a neural network trained on the MNIST dataset.
