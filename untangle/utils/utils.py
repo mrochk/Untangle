@@ -1,5 +1,4 @@
 import jax, jax.numpy as jnp
-import tqdm as tqdm_module
 from tqdm import tqdm
 from jaxtyping import jaxtyped, Float, Array, ArrayLike
 from beartype.typing import Callable, Tuple, Optional
@@ -56,14 +55,28 @@ def cpd_error(
     _tensor = cpd_reconstruct(factors, weights)
     return jnp.linalg.norm(tensor - _tensor) / jnp.linalg.norm(tensor)
 
-def function_error(target: Callable, decoupling: Callable, X: ArrayLike) -> float:
+def function_error(
+    target: Callable,
+    decoupling: Callable, 
+    X: Optional[ArrayLike] = None,
+    key: Optional[Array] = None,
+    n_inputs: Optional[int] = None,
+    minval: float = 0.0,
+    maxval: float = 1.0,
+    N: int = 1000,
+) -> float:
     assert callable(target) and callable(decoupling)
 
-    Y = jax.vmap(target)(X)
-    Y_learned = jax.vmap(decoupling)(X)
+    if X is None: 
+        if key is None: key = get_random_key()
+        if n_inputs is None: n_inputs = find_number_inputs(decoupling)
+        X = jax.random.uniform(key, shape=(N, n_inputs), minval=minval, maxval=maxval)
 
-    top = jnp.sqrt(jnp.mean((Y - Y_learned)**2, axis=0))
-    bot = jnp.sqrt(jnp.mean((Y - jnp.mean(Y, axis=0))**2, axis=0))
+    Ytarget  = jax.vmap(target)(X)
+    Ylearned = jax.vmap(decoupling)(X)
+
+    top = jnp.sqrt(jnp.mean((Ytarget - Ylearned)**2, axis=0))
+    bot = jnp.sqrt(jnp.mean((Ytarget - jnp.mean(Ytarget, axis=0))**2, axis=0))
 
     return top / bot * 100
 

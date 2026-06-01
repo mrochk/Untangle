@@ -24,7 +24,7 @@ def find_number_inputs(function: Callable):
     m = 1
     while True:
         try: function(jnp.zeros(m)); return m
-        except ValueError: m += 1
+        except (ValueError, TypeError): m += 1
 
 ### factors initialization
 
