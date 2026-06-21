@@ -2,13 +2,13 @@ import jax, jax.numpy as jnp
 from tqdm import tqdm
 
 from beartype import beartype
-from beartype.typing import Callable
-from jaxtyping import jaxtyped, Float, Array, ArrayLike
+from beartype.typing import Tuple
+from jaxtyping import jaxtyped, Float, ArrayLike
 
-from untangle.result import Decoupling
 from untangle import _ops as ops
 from untangle.utils import cpd_error
 from untangle.algorithm._base import _Base
+from untangle._common import dtype_factors
 
 class _CMTFWithProjection(_Base):
 
@@ -21,12 +21,13 @@ class _CMTFWithProjection(_Base):
     def _projection(self, H, R, Z):
         pass # return new_H, new_R, out_proj
 
-    def run(
+    @jaxtyped(typechecker=beartype)
+    def _run(
         self,
         inputs: Float[ArrayLike, 'N m'],
         outputs: Float[ArrayLike, 'N n'],
         jacobians: Float[ArrayLike, 'n m N'],
-    ) -> Decoupling:
+    ) -> Tuple[dtype_factors, Tuple]:
         inputs, outputs, jacobians = self._toarrays(inputs, outputs, jacobians)
 
         best_errors = []

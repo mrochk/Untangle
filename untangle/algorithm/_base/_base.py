@@ -3,7 +3,7 @@ from jaxtyping import jaxtyped, Array, ArrayLike, Float
 from beartype import beartype
 from beartype.typing import Tuple, Optional
 
-from untangle._common import as_float_array, get_random_key
+from untangle._common import as_float_array, get_random_key, dtype_factors
 from untangle.result import Decoupling
 
 class _Base:
@@ -45,7 +45,7 @@ class _Base:
     ) -> Decoupling: pass
 
     @jaxtyped(typechecker=beartype)
-    def _initialize_factors(self, jacobians: Float[Array, 'n m N'], key: Array, with_R: bool = False) -> Tuple:
+    def _initialize_factors(self, jacobians: Float[Array, 'n m N'], key: Array, with_R: bool = False) -> dtype_factors:
         n, m, N = jacobians.shape
         keys = jax.random.split(key, num=4)
 

@@ -1,11 +1,12 @@
 import random
 import jax, jax.numpy as jnp
-from jaxtyping import jaxtyped, Array, Float, ArrayLike, Num
-from bsplx import design_matrix, design_dmatrix, bspline_inference
 from functools import partial
-from beartype import beartype 
-from beartype.typing import Callable
 from scipy.interpolate import make_smoothing_spline
+from bsplx import design_matrix, design_dmatrix, bspline_inference
+
+from jaxtyping import jaxtyped, Array, Float, ArrayLike, Num
+from beartype import beartype 
+from beartype.typing import Callable, Union, Tuple
 
 from untangle import _ops as ops
 
@@ -198,3 +199,8 @@ def default_dof(N):
 
 def as_float_array(array: ArrayLike) -> Array:
     return jnp.asarray(array, dtype=jnp.result_type(array, jnp.float32))
+
+dtype_factors = Union[
+    Tuple[Float[Array, 'n r'], Float[Array, 'm r'], Float[Array, 'N r']],
+    Tuple[Float[Array, 'n r'], Float[Array, 'm r'], Float[Array, 'N r'], Float[Array, 'N r']],
+]

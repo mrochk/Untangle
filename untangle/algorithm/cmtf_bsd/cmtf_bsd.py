@@ -11,6 +11,8 @@ from untangle import _common as c
 
 class CMTF_BSpline(_CMTFWithProjection):
 
+    '''https://arxiv.org/abs/2504.03263'''
+
     dof: int
     degree: int
 
@@ -59,6 +61,6 @@ class CMTF_BSpline(_CMTFWithProjection):
 
     def run(self, inputs, outputs, jacobians):
         if self.dof is None: self.dof = c.default_dof(inputs.shape[0]) 
-        factors, (coefs, knots) = super().run(inputs, outputs, jacobians)
+        factors, (coefs, knots) = self._run(inputs, outputs, jacobians)
         def internals(z): return c.apply_internals(z, coefs, knots, self.degree)
         return Decoupling(factors, internals)
