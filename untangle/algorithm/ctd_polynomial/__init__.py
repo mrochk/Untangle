@@ -1,1 +1,1 @@
-from .ctd_polynomial import CTDPolynomial
+from .ctd_polynomial import CTD_Polynomial

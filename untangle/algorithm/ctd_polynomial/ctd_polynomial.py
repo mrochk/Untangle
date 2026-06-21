@@ -14,7 +14,7 @@ from untangle.result import Decoupling
 from untangle._common import make_polynomials
 from untangle.algorithm._base import _Base
 
-class CTDPolynomial(_Base):
+class CTD_Polynomial(_Base):
 
     '''https://hdl.handle.net/20.500.14017/4821c138-dddb-481d-9ea8-8bc6fd939b90'''
 
