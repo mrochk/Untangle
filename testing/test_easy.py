@@ -1,6 +1,8 @@
-import jax, jax.numpy as jnp, unittest
-from untangle.algorithm import BasicDecoupling, CTD_Polynomial, CMTF_BSpline, CMTF_PSpline
+import jax, jax.numpy as jnp
+import unittest
+
 from untangle.utils import collect_information, function_error
+from untangle.algorithm import BasicDecoupling, CTD_Polynomial, CMTF_BSpline, CMTF_PSpline
 
 def target(x):
     a, b = x
@@ -20,29 +22,22 @@ class TestEasy(unittest.TestCase):
         algo = BasicDecoupling(rank=self.rank, key=self.key, ninits=2)
         decoupling = algo.run(self.X, self.Y, self.J)
         errors = function_error(target, decoupling, self.X, self.key)
-        print(errors)
         self.assertTrue(all(jnp.array(errors) < 10.0))
 
     def test_ctd(self):
         algo = CTD_Polynomial(rank=self.rank, key=self.key, ninits=2)
         decoupling = algo.run(self.X, self.Y, self.J)
         errors = function_error(target, decoupling, self.X, self.key)
-        print(algo.errors)
-        print(errors)
         self.assertTrue(all(jnp.array(errors) < 10.0))
 
     def test_cmtf_bsd(self):
         algo = CMTF_BSpline(rank=self.rank, key=self.key, ninits=2)
         decoupling = algo.run(self.X, self.Y, self.J)
         errors = function_error(target, decoupling, self.X, self.key)
-        print(algo.errors)
-        print(errors)
         self.assertTrue(all(jnp.array(errors) < 10.0))
 
     def test_cmtf_psd(self):
         algo = CMTF_PSpline(rank=self.rank, key=self.key, ninits=2)
         decoupling = algo.run(self.X, self.Y, self.J)
         errors = function_error(target, decoupling, self.X, self.key)
-        print(algo.errors)
-        print(errors)
         self.assertTrue(all(jnp.array(errors) < 10.0))

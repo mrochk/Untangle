@@ -59,7 +59,6 @@ class CMTF_BSpline(_CMTFWithProjection):
 
     def run(self, inputs, outputs, jacobians):
         if self.dof is None: self.dof = c.default_dof(inputs.shape[0]) 
-
         factors, (coefs, knots) = super().run(inputs, outputs, jacobians)
-        internals = c.make_internals(c.fit_internals_with_best_coefs(coefs, knots, self.degree))
+        def internals(z): return c.apply_internals(z, coefs, knots, self.degree)
         return Decoupling(factors, internals)

@@ -6,7 +6,7 @@ import jax, jax.numpy as jnp, optax
 from torch.utils.data import DataLoader
 from optax.losses import softmax_cross_entropy_with_integer_labels as celoss
 
-from untangle.utils import collect_information, function_error, best_of_n
+from untangle.utils import collect_information, function_error
 from untangle.scaler import JacobianScaler
 from untangle import algorithm
 
@@ -107,15 +107,15 @@ def main():
 
     X, Y, J = collect_information(lambda x: forward(params, x), N, key, 784, X=X)
 
-    scaler = JacobianScaler(J, Y)
-    J_scaled, Y_scaled = scaler.scale()
+    scaler = JacobianScaler(J)
+    J_scaled, Y_scaled = scaler.scale(J, Y)
     scaling_factors = scaler.factors
 
     def dforward(dparams, x):
         V, W = dparams
         return (W @ decoupling.internals(V.T @ x)) / scaling_factors
 
-    for rank in [32]:
+    for rank in [64]:
 
         print(f'RANK = {rank}')
 
@@ -125,10 +125,25 @@ def main():
         min_err = jnp.inf
         best_decoupling = None
 
-        for k in jax.random.split(key, ntries)[3:4]:
-            decoupling, _ = algorithm.cmtf_psd(X, Y_scaled, J_scaled, rank, niters, key=k)
+        def batch_dforward(dparams, X):
+            return jax.vmap(partial(dforward, dparams))(X)
+
+        def evaluate_decoupling(dparams, loader):
+            accuracy = 0.0
+            for i, (X, y) in enumerate(tqdm(loader, desc='Decoupling Evaluation')):
+                logits = batch_dforward(dparams, X)
+                preds = jnp.argmax(jax.nn.softmax(logits), -1)
+                accuracy += (jnp.mean(preds == y) - accuracy) / (i+1)
+            print(f'\nAccuracy = {accuracy*100:.2f}% ===================\n')
+
+        for k in jax.random.split(key, 3):
+
+            algo = algorithm.CMTF_PSpline(rank, key=k, niters=50)
+            decoupling = algo.run(X, Y_scaled, J_scaled)
 
             dparams = [decoupling.V, decoupling.W]
+
+            evaluate_decoupling(dparams, testloader)
 
             errs = function_error(lambda x: forward(params, x), lambda x: dforward(dparams, x), X)
             print(jnp.mean(errs))

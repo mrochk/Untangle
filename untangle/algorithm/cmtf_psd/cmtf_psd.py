@@ -39,7 +39,6 @@ class CMTF_PSpline(_CMTFWithProjection):
 
     def run(self, inputs, outputs, jacobians):
         if self.dof is None: self.dof = default_dof(inputs.shape[0]) 
-
         factors, (coefs, knots) = super().run(inputs, outputs, jacobians)
         def internals(z): return apply_internals(z, coefs, knots, self.degree)
         return Decoupling(factors, internals)
@@ -63,7 +62,7 @@ class CMTF_PSpline(_CMTFWithProjection):
                 warnings.warn(f'Internal {rank} is degenerate (max - min < 1e-6).')
                 H = H.at[:, rank].set(jnp.zeros_like(H[:, rank]))
                 R = R.at[:, rank].set(jnp.zeros_like(R[:, rank]))
-                coefs_out.append(None); knots_out.append(None)
+                coefs_out.append(None); knots_out.append(None); new_lams.append(None)
                 continue
 
             knots = determine_knots(z, self.dof, self.degree, 'even')

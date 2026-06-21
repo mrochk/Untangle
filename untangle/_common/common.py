@@ -88,15 +88,15 @@ def fit_internal_with_best_coefs(coefs, knots, degree):
         return jnp.squeeze(B @ coefs)
     return g
 
-def apply_internals(Z, C, knots, degree):
-    coefs_stacked = jnp.stack(C)
+def apply_internals(z, coefs, knots, degree):
+    coefs_stacked = jnp.stack(coefs)
     knots_stacked = jnp.stack(knots)
     
-    def single_internal(zi, ci, ki):
-        B = get_design_matrix(jnp.atleast_1d(zi), ki, degree)
-        return (B @ ci).squeeze()
+    def single_internal(zi, c, k):
+        B = get_design_matrix(jnp.atleast_1d(zi), k, degree)
+        return (B @ c).squeeze()
     
-    return jax.vmap(single_internal)(Z, coefs_stacked, knots_stacked)
+    return jax.vmap(single_internal)(z, coefs_stacked, knots_stacked)
 
 def fit_internals_with_best_coefs(coefs_list, knots_list, degree):
     internals = []

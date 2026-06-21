@@ -1,3 +1,4 @@
+import jax
 from jaxtyping import ArrayLike
 from beartype.typing import Callable
 
@@ -15,6 +16,7 @@ class Decoupling:
         else: self.W, self.V, self.H = factors
         self.internals = internals
 
+    @jax.jit
     def __call__(self, x: ArrayLike) -> ArrayLike:
         return self.W @ self.internals(self.V.T @ x)
 

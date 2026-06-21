@@ -1,8 +1,9 @@
-import jax
+import jax, jax.numpy as jnp
 from tqdm import tqdm
-from jaxtyping import jaxtyped, Float, Array, ArrayLike
+
 from beartype import beartype
 from beartype.typing import Callable
+from jaxtyping import jaxtyped, Float, Array, ArrayLike
 
 from untangle.result import Decoupling
 from untangle import _ops as ops
@@ -39,6 +40,8 @@ class _CMTFWithProjection(_Base):
 
         for key in jax.random.split(self.key, self.ninits):
 
+            errors = []
+
             W, V, H, R = self._initialize_factors(jacobians, key, True)
 
             bar = tqdm(range(self.niters), type(self).__name__, disable=not self.show_progress)
@@ -56,6 +59,7 @@ class _CMTFWithProjection(_Base):
                 H, R, out_proj = self._projection(H, R, inputs @ V)
 
                 error = cpd_error(jacobians, (W, V, H))
+                errors.append(error)
 
                 if iteration == 0 or error < best_error:
                     best = (W, V, H, R)
@@ -69,5 +73,6 @@ class _CMTFWithProjection(_Base):
             if best_error < min_error:
                 min_error = best_error
                 result = (best, best_out_proj)
+                self.errors = jnp.array(errors)
 
         return result

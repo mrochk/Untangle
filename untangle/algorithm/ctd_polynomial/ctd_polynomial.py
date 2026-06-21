@@ -106,7 +106,7 @@ class CTD_Polynomial(_Base):
 
             if iteration > 0:
                 diff = abs(error - errors[-1])
-                bar.set_postfix_str(f'error={error:.4f}, diff={diff:.8f}, best={best_iter}')
+                bar.set_postfix_str(f'error={error:.4f}, best={min_error:.4f} ({best_iter})')
 
             else: bar.set_postfix_str(f'error={error:.4f}, best={best_iter}')
             errors.append(error)
