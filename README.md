@@ -4,6 +4,20 @@
 
 Fast tensor decoupling in Jax. Collection of algorithms for decoupling multivariate functions using tensor decompositions.
 
+```python
+from untangle.algorithm import BasicDecoupling
+from untangle.utils import collect_information, function_error
+
+def target(x): # define a simple polynomial
+    return jnp.array([x[0]**3 + x[1]**2 + x[0]*b, x[1]**3 + x[0]**2 + x[0]*b])
+
+rank, N = 4, 30 # rank and numeber of samples
+info = collect_information(target, N, key) # collect outputs and jacobians
+
+decoupling = BasicDecoupling(rank, key=key).run(*info) # compute decoupling
+errors = function_error(target, decoupling, X, key) # evaluate
+```
+
 This project was built using `uv` (https://docs.astral.sh/uv). 
 
 ### Installation
@@ -12,10 +26,10 @@ You can easily get `untangle` from PyPI:
 ```bash
 pip install decoupling # ("untangle" was already taken...)
 ```
-Otherwise, for a local `uv` installation:
+Otherwise, for a local installation:
 ```bash
 git clone git@github.com:mrochk/untangle.git
-uv add ./untangle # or pip install ./untangle
+pip install untangle
 ```
 
 ### Methodology

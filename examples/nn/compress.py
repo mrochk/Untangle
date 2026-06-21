@@ -43,23 +43,6 @@ batch_size = 128
 
 from untangle._common import default_dof
 
-# ---------------------------------------------------------------------------
-# Knowledge Distillation loss
-#
-# We want the compressed model f̂ to match the teacher f's soft predictions.
-# The loss is a KL divergence between the teacher's and student's softened
-# probability distributions:
-#
-#   L_KD = KL( softmax(teacher_logits / T) || softmax(student_logits / T) )
-#        = sum_c  p_c * (log p_c - log q_c)
-#
-# where p = softmax(teacher/T), q = softmax(student/T).
-#
-# A higher temperature T produces softer distributions, which expose more
-# inter-class similarity information from the teacher (Hinton et al., 2015).
-# T=1 reduces to a standard KL on raw softmax outputs.
-# ---------------------------------------------------------------------------
-
 def kd_loss_single(teacher_logits, student_logits, temperature):
     """KL( teacher || student ) for a single example."""
     p = jax.nn.softmax(teacher_logits / temperature)   # teacher soft targets
@@ -73,9 +56,6 @@ def batch_kd_loss(teacher_logits, student_logits, temperature):
         teacher_logits, student_logits, temperature
     )
     return jnp.mean(per_example)
-
-
-# ---------------------------------------------------------------------------
 
 def main():
     parser = argparse.ArgumentParser()
@@ -119,9 +99,6 @@ def main():
 
         print(f'RANK = {rank}')
 
-        # ------------------------------------------------------------------
-        # Compute decoupling (unchanged from original)
-        # ------------------------------------------------------------------
         min_err = jnp.inf
         best_decoupling = None
 
@@ -188,9 +165,6 @@ def main():
         same = jnp.mean(preds_decoupling == preds_nn)
         print(f'Same = {same*100:.2f}%')
 
-        # ------------------------------------------------------------------
-        # Evaluation helper (unchanged)
-        # ------------------------------------------------------------------
         def evaluate_decoupling(dparams, loader):
             accuracy = 0.0
             for i, (X, y) in enumerate(tqdm(loader, desc='Decoupling Evaluation')):
@@ -198,18 +172,6 @@ def main():
                 preds = jnp.argmax(jax.nn.softmax(logits), -1)
                 accuracy += (jnp.mean(preds == y) - accuracy) / (i+1)
             print(f'\nAccuracy = {accuracy*100:.2f}% ===================\n')
-
-        # ------------------------------------------------------------------
-        # Fine-tuning with Knowledge Distillation
-        #
-        # Instead of minimising CE(true_labels, f̂), we minimise:
-        #
-        #   L = KL( softmax(f(x)/T) || softmax(f̂(x)/T) )
-        #
-        # i.e. the student is trained purely to match the teacher's soft
-        # probability distribution at temperature T.  The internals g are
-        # frozen; only V and W are updated.
-        # ------------------------------------------------------------------
 
         def ce_loss(dparams, X, y):
             logits = batch_dforward(dparams, X)
