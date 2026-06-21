@@ -1,11 +1,16 @@
-from jaxtyping import ArrayLike
+from jaxtyping import jaxtyped, ArrayLike, Float
 from beartype.typing import Callable
+from beartype import beartype
+
+from untangle._common import dtype_factors
 
 class Decoupling:
-    factors: tuple
+
+    factors: dtype_factors
     internals: Callable
 
-    def __init__(self, factors: tuple, internals: Callable):
+    @jaxtyped(typechecker=beartype)
+    def __init__(self, factors: dtype_factors, internals: Callable):
         assert len(factors) >= 3
         assert callable(internals)
         assert factors[0].shape[-1] == factors[1].shape[-1] == factors[2].shape[-1]
@@ -15,8 +20,8 @@ class Decoupling:
         else: self.W, self.V, self.H = factors
         self.internals = internals
 
-    def __call__(self, x: ArrayLike) -> ArrayLike:
+    @jaxtyped(typechecker=beartype)
+    def __call__(self, x: Float[ArrayLike, 'm']) -> Float[ArrayLike, 'n']:
         return self.W @ self.internals(self.V.T @ x)
 
-    def inference(self, x: ArrayLike) -> ArrayLike:
-        return self.__call__(x)
+    def inference(self, x: ArrayLike) -> ArrayLike: return self.__call__(x)

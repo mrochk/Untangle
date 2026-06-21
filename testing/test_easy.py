@@ -1,6 +1,8 @@
-import jax, jax.numpy as jnp, unittest
-from untangle import algorithm
+import jax, jax.numpy as jnp
+import unittest
+
 from untangle.utils import collect_information, function_error
+from untangle.algorithm import BasicDecoupling, CTD_Polynomial, CMTF_BSpline, CMTF_PSpline
 
 def target(x):
     a, b = x
@@ -16,15 +18,28 @@ class TestEasy(unittest.TestCase):
         self.ninits = 5
         self.X, self.Y, self.J = collect_information(target, 30, self.key)
 
-    def _test_algorithm(self, algo):
-        okay = False
-        for k in jax.random.split(self.key, self.ninits):
-            decoupling, _ = algo(self.X, self.Y, self.J, self.rank, key=k)
-            e1, e2 = function_error(target, decoupling, self.X)
-            if e1 < 10 and e2 < 10: okay = True; break
-        self.assertTrue(okay)
+    def test_basic(self):
+        algo = BasicDecoupling(rank=self.rank, key=self.key)
+        decoupling = algo.run(self.X, self.Y, self.J)
+        errors = function_error(target, decoupling, self.X, self.key)
+        self.assertTrue(all(jnp.array(errors) < 10.0))
 
-    def test_basic(self): self._test_algorithm(algorithm.basic_decoupling)
-    def test_ctd_polynomial(self): self._test_algorithm(algorithm.ctd_polynomial)
-    def test_cmtf_bsd(self): self._test_algorithm(algorithm.cmtf_bsd)
-    def test_cmtf_psd(self): self._test_algorithm(algorithm.cmtf_psd)
+    def test_ctd(self):
+        algo = CTD_Polynomial(rank=self.rank, key=self.key)
+        decoupling = algo.run(self.X, self.Y, self.J)
+        errors = function_error(target, decoupling, self.X, self.key)
+        self.assertTrue(all(jnp.array(errors) < 10.0))
+
+    def test_cmtf_bsd(self):
+        algo = CMTF_BSpline(rank=self.rank, key=self.key)
+        decoupling = algo.run(self.X, self.Y, self.J)
+        errors = function_error(target, decoupling, self.X, self.key)
+        print(errors)
+        self.assertTrue(all(jnp.array(errors) < 10.0))
+
+    def test_cmtf_psd(self):
+        algo = CMTF_PSpline(rank=self.rank, key=self.key)
+        decoupling = algo.run(self.X, self.Y, self.J)
+        errors = function_error(target, decoupling, self.X, self.key)
+        print(errors)
+        self.assertTrue(all(jnp.array(errors) < 10.0))

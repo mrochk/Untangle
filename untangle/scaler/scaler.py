@@ -1,58 +1,65 @@
 import jax, jax.numpy as jnp
-from jaxtyping import jaxtyped, Float, Array
-from beartype.typing import Callable, Tuple
 from beartype import beartype
+from beartype.typing import Callable, Tuple, Optional
+from jaxtyping import jaxtyped, Float, Array, ArrayLike
 
 from untangle.utils import get_random_key
-
-class FunctionScaler:
-
-    @jaxtyped(typechecker=beartype)
-    def __init__(self, f: Callable, n_inputs: int, key: Array = None, scaler: str = 'max', N: int = 1_000):
-
-        assert callable(f)
-        self.f = f
-
-        if key is None: key = get_random_key()
-        X = jax.random.uniform(key, shape=(N, n_inputs))
-
-        self.outputs = jax.vmap(f)(X)
-
-        match scaler:
-            case 'max': self.factors = 1 / jnp.max(self.outputs, axis=0)
-            case 'std': self.factors = 1 / jnp.std(self.outputs, axis=0)
-            case _: raise ValueError('only "max" and "std" scalers supported')
-
-    @jaxtyped(typechecker=beartype)
-    def scale(self) -> Callable:
-        def f_scaled(x): return self.f(x) * self.factors
-        return f_scaled
-
-    @jaxtyped(typechecker=beartype)
-    def unscale(self, f_scaled: Callable) -> Callable:
-        def f_unscaled(x): return f_scaled(x) / self.factors
-        return f_unscaled
+from untangle._common import find_number_inputs
 
 class JacobianScaler:
-    @jaxtyped(typechecker=beartype)
-    def __init__(self, J: Float[Array, 'n m N'], Y: Float[Array, 'N n']):
-        self.J = J
-        self.Y = Y
+    '''
+    Rescale the Jacobians so that each output is equally minimized.
+    Particularly useful for functions with vastly different output (and gradient) ranges.
+    '''
 
-        n, m, N = J.shape
-        self.factors = jnp.sqrt(m*N) / jnp.linalg.norm(J.reshape(n, -1), axis=1)
+    factors: Float[Array, 'n']
 
     @jaxtyped(typechecker=beartype)
-    def scale(self) -> Tuple[Float[Array, 'n m N'], Float[Array, 'N n']]:
-        J_scaled = self.J * self.factors[:, None, None]
-        Y_scaled = self.Y * self.factors[None, :]
+    def __init__(self, jacobians: Float[Array, 'n m N']):
+        n, m, N = jacobians.shape
+        self.factors = jnp.sqrt(m*N) / jnp.linalg.norm(jacobians.reshape(n, -1), axis=1)
+
+    @classmethod
+    def from_inputs(cls, target: Callable, inputs: Float[ArrayLike, 'N m']):
+        assert callable(target)
+        jacobians = jax.vmap(jax.jacobian(target))(inputs).transpose((1, 2, 0))
+        return cls(jacobians)
+
+    @classmethod
+    def from_random(
+        cls, 
+        target: Callable, 
+        N: int, 
+        ninputs: Optional[int] = None,
+        key: Optional[Array] = None, 
+        minval: float = 0.0,
+        maxval: float = 1.0,
+        dist: str = 'uniform',
+    ):
+        assert callable(target)
+
+        if ninputs is None: ninputs = find_number_inputs(target)
+        if key is None: key = get_random_key()
+
+        match dist:
+            case 'uniform': inputs = jax.random.uniform(key, (N, ninputs), minval=minval, maxval=maxval)
+            case _: raise NotImplementedError()
+
+        jacobians = jax.vmap(jax.jacobian(target))(inputs).transpose((1, 2, 0))
+        return cls(jacobians)
+        
+    @jaxtyped(typechecker=beartype)
+    def scale(self, jacobians, outputs) -> Tuple[Float[Array, 'n m N'], Float[Array, 'N n']]:
+        J_scaled = jacobians * self.factors[:, None, None]
+        Y_scaled = outputs * self.factors[None, :]
         return J_scaled, Y_scaled
 
     @jaxtyped(typechecker=beartype)
-    def unscale(self, f_scaled: Callable) -> Callable:
-        def f_unscaled(x): return (f_scaled(x).T / self.factors).T
-        return f_unscaled
+    def unscale_function(self, f_scaled: Callable) -> Callable:
+        def f_unscaled(x): return f_scaled(x) / self.factors
+        return jax.jit(f_unscaled)
 
+    @jax.jit
     @jaxtyped(typechecker=beartype)
     def unscale_output(self, output: Float[Array, 'n']) -> Float[Array, 'n']:
         return output / self.factors

@@ -1,1 +1,1 @@
-from .scaler import FunctionScaler, JacobianScaler
+from .scaler import JacobianScaler

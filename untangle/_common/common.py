@@ -1,11 +1,12 @@
 import random
 import jax, jax.numpy as jnp
-from jaxtyping import jaxtyped, Array, Float
-from bsplx import design_matrix, design_dmatrix, bspline_inference
 from functools import partial
-from beartype import beartype 
-from beartype.typing import Callable
 from scipy.interpolate import make_smoothing_spline
+from bsplx import design_matrix, design_dmatrix, bspline_inference
+
+from jaxtyping import jaxtyped, Array, Float, ArrayLike, Num
+from beartype import beartype 
+from beartype.typing import Callable, Union, Tuple
 
 from untangle import _ops as ops
 
@@ -87,6 +88,16 @@ def fit_internal_with_best_coefs(coefs, knots, degree):
         B = get_design_matrix(jnp.atleast_1d(x), knots, degree)
         return jnp.squeeze(B @ coefs)
     return g
+
+def apply_internals(z, coefs, knots, degree):
+    coefs_stacked = jnp.stack(coefs)
+    knots_stacked = jnp.stack(knots)
+    
+    def single_internal(zi, c, k):
+        B = get_design_matrix(jnp.atleast_1d(zi), k, degree)
+        return (B @ c).squeeze()
+    
+    return jax.vmap(single_internal)(z, coefs_stacked, knots_stacked)
 
 def fit_internals_with_best_coefs(coefs_list, knots_list, degree):
     internals = []
@@ -183,3 +194,13 @@ def _closest(knot, u):
 
 def default_dof(N):
     return max(min([2*int(jnp.sqrt(N))+1, N//2]), 1)
+
+# dtype
+
+def as_float_array(array: ArrayLike) -> Array:
+    return jnp.asarray(array, dtype=jnp.result_type(array, jnp.float32))
+
+dtype_factors = Union[
+    Tuple[Float[Array, 'n r'], Float[Array, 'm r'], Float[Array, 'N r']],
+    Tuple[Float[Array, 'n r'], Float[Array, 'm r'], Float[Array, 'N r'], Float[Array, 'N r']],
+]
