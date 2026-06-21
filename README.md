@@ -15,7 +15,7 @@ rank, N = 4, 30 # rank and numeber of samples
 info = collect_information(target, N, key) # collect outputs and jacobians
 
 decoupling = BasicDecoupling(rank, key=key).run(*info) # compute decoupling
-errors = function_error(target, decoupling, X, key) # evaluate
+errors = function_error(target, decoupling, info[0], key) # evaluate
 ```
 
 This project was built using `uv` (https://docs.astral.sh/uv). 
