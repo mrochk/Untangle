@@ -70,12 +70,11 @@ def vandermonde_diag(X, d: int):
 ### wrappers for least squares funcs
 
 @jax.jit
-def lstsq(X, Y):
-    return jnp.linalg.lstsq(X, Y)[0].T
+def lstsq(X, Y): return jnp.linalg.lstsq(X, Y)[0].T
 
 @jax.jit(static_argnames='gamma')
 @jaxtyped(typechecker=beartype)
-def cmtf_lstsq(X1, X2, Y1, Y2, gamma: float, ridge: float = 1e-8):
+def cmtf_lstsq(X1, X2, Y1, Y2, gamma: float):
     X = jnp.concatenate([X1, gamma*X2], axis=0)
     Y = jnp.concatenate([Y1, gamma*Y2], axis=0)
     return jnp.linalg.lstsq(X, Y)[0].T

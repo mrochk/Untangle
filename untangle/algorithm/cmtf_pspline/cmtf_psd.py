@@ -43,8 +43,9 @@ def cmtf_psd(
         show_progress=show_progress,
     )
 
-    internals = fit_internals_with_best_coefs(coefs, knots, degree)
-    return (Decoupling(factors, make_internals(internals)), error)
+    def internals(z): return apply_internals(z, coefs, knots, degree)
+
+    return (Decoupling(factors, internals), error)
 
 def pspl_project(
     H: Float[Array, 'N r'],

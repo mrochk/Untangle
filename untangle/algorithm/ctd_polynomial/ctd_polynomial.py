@@ -1,74 +1,185 @@
 import jax, jax.numpy as jnp
 from numpy.polynomial import Polynomial
-from beartype import beartype
-from beartype.typing import Tuple
-from jaxtyping import jaxtyped, Array, Float
+from functools import partial
+from tqdm import tqdm
 
-from untangle.algorithm import Decoupling
-from untangle.decomposition import cpd_polynomial_constraint
-from untangle._common import make_polynomials, make_log
+from jaxtyping import jaxtyped, Array, Float, ArrayLike
+from beartype import beartype 
+from beartype.typing import Tuple, Optional 
 
-@jaxtyped(typechecker=beartype)
-def ctd_polynomial(
-    X: Float[Array, 'N m'], 
-    Y: Float[Array, 'N n'], 
-    J: Float[Array, 'n m N'], 
-    rank: int,
-    degree: int = 3,
-    maxiters: int = 100,
-    verbose: int = 0,
-    key: Array = None,
-    **cpd_kwargs,
-) -> Tuple[Decoupling, Array]:
-    factors, dcoefs, errors = cpd_polynomial_constraint(X, J, rank, degree, maxiters, key, verbose=verbose, **cpd_kwargs)
-    W, V, _ = factors
-    coefs = _integrate(dcoefs, X @ V, Y, W)
-    internals = make_polynomials(coefs)
-    return Decoupling(factors, internals), errors[-1]
+from untangle.utils import get_random_key, cpd_error
+from untangle import _ops as ops
+from untangle._common import solve_cpd_subproblem
+from untangle.result import Decoupling
+from untangle._common import make_polynomials
+from untangle.algorithm._base import _Base
 
-def _integrate(dcoefs, Z, Y, W):
-    assert dcoefs.shape[1] == W.shape[1]
+class CTDPolynomial(_Base):
 
-    degree, rank = dcoefs.shape
-    coefs = jnp.zeros((degree + 1, rank))
+    '''https://hdl.handle.net/20.500.14017/4821c138-dddb-481d-9ea8-8bc6fd939b90'''
 
-    # find non-constant coefficients from integration:
-    # c_{i+1} = c'_i / (i+1)
-    for d in range(degree):
-        coefs = coefs.at[d + 1, :].set(dcoefs[d, :] / (d + 1))
+    degree: int
 
-    # estimate constants from observations
-    gs_no_czero = [Polynomial(coefs[:, j]) for j in range(rank)]
+    @jaxtyped(typechecker=beartype)
+    def __init__(
+        self,
+        rank: int,
+        degree: int = 3,
+        niters: int = 100,
+        ninits: int = 1,
+        key: Optional[Array] = None,
+        show_progress: bool = True,
+    ):
+        super().__init__(rank, niters, ninits, key, show_progress)
+        self.degree = degree
 
-    # N = n samples
-    # n = n outputs of initial func
+    @jaxtyped(typechecker=beartype)
+    def run(
+        self,
+        inputs: Float[ArrayLike, 'N m'],
+        outputs: Float[ArrayLike, 'N n'],
+        jacobians: Float[ArrayLike, 'n m N'],
+    ) -> Decoupling:
 
-    N = Z.shape[0]
-    n = Y.shape[1]
+        inputs, outputs, jacobians = self._toarrays(inputs, outputs, jacobians)
 
-    columns_W = jnp.zeros((N * n, rank))
-    residuals = jnp.zeros(N * n)
+        min_error = float('inf')
+        best = None
 
-    for i in range(N):
-        # evaluate g(z) without constants
-        g_vals = jnp.array([gs_no_czero[j](Z[i, j]) for j in range(rank)])
-        y_pred = W @ g_vals
+        for key in jax.random.split(self.key, self.ninits):
+            factors, dcoefs, errors = self._cpd_polynomial_constraint(inputs, jacobians, key)
+            error = errors[-1]
+            if error < min_error:
+                min_error = error
+                best = (factors, dcoefs, errors.copy())
 
-        for j in range(n):  # for each output
-            row_idx = i * n + j  # get the correct index for output j of sample i
+        factors, dcoefs, errors = best
+        self.errors = jnp.array(errors)
 
-            # we are looking for constants that minimize the residual
-            # between the y and the values we get when using the polynomials
-            # without constant terms
-            residuals = residuals.at[row_idx].set(Y[i, j] - y_pred[j])
+        (W, V, _) = factors
 
-            # design matrix of our least-squares problem
-            # it contains the corresponding column of W for each output
-            # (the one that multiplies the c_0 we want to solve for, for the corresponding output)
-            columns_W = columns_W.at[row_idx, :].set(W[j, :])
+        coefs = self._integrate(dcoefs, inputs @ V, outputs, W)
+        return Decoupling(factors, make_polynomials(coefs))
 
-    # solve for constants c_{i, 0}
-    c_zeros = jnp.linalg.lstsq(columns_W, residuals, rcond=None)[0]
-    coefs = coefs.at[0, :].set(c_zeros)
+    @jaxtyped(typechecker=beartype)
+    def _cpd_polynomial_constraint(
+        self,
+        X: Float[Array, 'N m'],
+        jacobians: Float[Array, 'n m N'],
+        key: Array,
+    ) -> Tuple[
+        Tuple[Float[Array, 'n r'], Float[Array, 'm r'], Float[Array, 'N r']],
+        Float[Array, 'd r'], list,
+    ]:
+        if key is None: key = get_random_key()
 
-    return coefs.T
+        errors = []
+
+        factors, weights = self._initialize_factors(jacobians, key), jnp.ones(self.rank)
+        W, V, H = factors
+
+        J0 = ops.unfold_kolda(jacobians, 0)
+        J1 = ops.unfold_kolda(jacobians, 1)
+        J2 = ops.unfold_kolda(jacobians, 2)
+
+        solve_W = partial(solve_cpd_subproblem, unfolded=J0, mode=0)
+        solve_V = partial(solve_cpd_subproblem, unfolded=J1, mode=1)
+
+        min_error = float('inf')
+        best = None
+
+        bar = tqdm(range(self.niters), type(self).__name__, disable=not self.show_progress)
+        for iteration in bar:
+            W = solve_W(W=W, V=V, H=H)
+            V = solve_V(W=W, V=V, H=H)
+            W, V = ops.normalize_columns_V(W, V)
+
+            H, dcoefs = self._update_H_with_polynomial_constraint(J2, X, V, W)
+
+            factors = W, V, H
+            error = cpd_error(jacobians, factors, weights)
+
+            if error < min_error:
+                min_error = error
+                best = ((W.copy(), V.copy(), H.copy()), dcoefs.copy())
+                best_iter = iteration
+
+            if iteration > 0:
+                diff = abs(error - errors[-1])
+                bar.set_postfix_str(f'error={error:.4f}, diff={diff:.8f}, best={best_iter}')
+
+            else: bar.set_postfix_str(f'error={error:.4f}, best={best_iter}')
+            errors.append(error)
+
+        return best[0], best[1], errors
+
+    def _update_H_with_polynomial_constraint(
+        self,
+        unfolded: Array,
+        X: Float[Array, 'N m'],
+        V: Float[Array, 'm r'],
+        W: Float[Array, 'n r'],
+    ) -> Tuple[Float[Array, 'N r'], Float[Array, 'd r']]:
+        Z = X @ V # inputs to g
+
+        vand_matrices = []
+        for r in range(self.rank):
+            vand = ops.vandermonde_matrix(Z[:, r], self.degree)
+            vand_matrices.append(vand)
+
+        vand_diag = ops.block_diag(vand_matrices)
+
+        KR = ops.khatri_rao(V, W)
+        K = jnp.kron(KR, jnp.eye(X.shape[0]))
+        Z = K @ vand_diag
+
+        Zinv = jnp.linalg.pinv(Z)
+        dcoefs = Zinv @ ops.reshape(unfolded, -1)
+        dcoefs = ops.reshape(dcoefs, (self.degree+1, self.rank))
+
+        H = jnp.column_stack([Xi @ ci for Xi, ci in zip(vand_matrices, dcoefs.T)])
+        return H, dcoefs
+
+    def _integrate(self, dcoefs, Z, Y, W):
+        assert dcoefs.shape[1] == W.shape[1]
+
+        degree, rank = dcoefs.shape
+        coefs = jnp.zeros((degree + 1, rank))
+
+        # find non-constant coefficients from integration:
+        # c_{i+1} = c'_i / (i+1)
+        for d in range(degree):
+            coefs = coefs.at[d + 1, :].set(dcoefs[d, :] / (d + 1))
+
+        # estimate constants from observations
+        gs_no_czero = [Polynomial(coefs[:, j]) for j in range(rank)]
+
+        N = Z.shape[0]
+        n = Y.shape[1]
+
+        columns_W = jnp.zeros((N * n, rank))
+        residuals = jnp.zeros(N * n)
+
+        for i in range(N):
+            # evaluate g(z) without constants
+            g_vals = jnp.array([gs_no_czero[j](Z[i, j]) for j in range(rank)])
+            y_pred = W @ g_vals
+
+            for j in range(n):  # for each output
+                row_idx = i * n + j  # get the correct index for output j of sample i
+
+                # we are looking for constants that minimize the residual
+                # between the y and the values we get when using the polynomials
+                # without constant terms
+                residuals = residuals.at[row_idx].set(Y[i, j] - y_pred[j])
+
+                # design matrix of our least-squares problem
+                # it contains the corresponding column of W for each output
+                # (the one that multiplies the c_0 we want to solve for, for the corresponding output)
+                columns_W = columns_W.at[row_idx, :].set(W[j, :])
+
+        # solve for constants c_{i, 0}
+        c_zeros = jnp.linalg.lstsq(columns_W, residuals, rcond=None)[0]
+        coefs = coefs.at[0, :].set(c_zeros)
+
+        return coefs.T

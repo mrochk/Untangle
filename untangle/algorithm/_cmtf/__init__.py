@@ -1,1 +1,1 @@
-from .cmtf import cmtf
+from ._cmtf import _CMTFWithProjection

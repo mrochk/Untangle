@@ -43,14 +43,51 @@ batch_size = 128
 
 from untangle._common import default_dof
 
+# ---------------------------------------------------------------------------
+# Knowledge Distillation loss
+#
+# We want the compressed model f̂ to match the teacher f's soft predictions.
+# The loss is a KL divergence between the teacher's and student's softened
+# probability distributions:
+#
+#   L_KD = KL( softmax(teacher_logits / T) || softmax(student_logits / T) )
+#        = sum_c  p_c * (log p_c - log q_c)
+#
+# where p = softmax(teacher/T), q = softmax(student/T).
+#
+# A higher temperature T produces softer distributions, which expose more
+# inter-class similarity information from the teacher (Hinton et al., 2015).
+# T=1 reduces to a standard KL on raw softmax outputs.
+# ---------------------------------------------------------------------------
+
+def kd_loss_single(teacher_logits, student_logits, temperature):
+    """KL( teacher || student ) for a single example."""
+    p = jax.nn.softmax(teacher_logits / temperature)   # teacher soft targets
+    log_q = jax.nn.log_softmax(student_logits / temperature)  # student log-probs
+    # KL(p||q) = sum p * (log p - log q)
+    return jnp.sum(p * (jnp.log(p + 1e-8) - log_q))
+
+def batch_kd_loss(teacher_logits, student_logits, temperature):
+    """Mean KL loss over a batch."""
+    per_example = jax.vmap(kd_loss_single, in_axes=(0, 0, None))(
+        teacher_logits, student_logits, temperature
+    )
+    return jnp.mean(per_example)
+
+
+# ---------------------------------------------------------------------------
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--niters', type=int, required=False, default=10)
-    parser.add_argument('--ntries', type=int, required=False, default=5)
+    parser.add_argument('--niters',      type=int,   required=False, default=10)
+    parser.add_argument('--ntries',      type=int,   required=False, default=5)
+    parser.add_argument('--temperature', type=float, required=False, default=4.0,
+                        help='Distillation temperature T (default: 4.0)')
     args = parser.parse_args()
 
-    niters = args.niters
-    ntries = args.ntries
+    niters      = args.niters
+    ntries      = args.ntries
+    temperature = args.temperature
 
     key = jax.random.key(0)
 
@@ -82,12 +119,13 @@ def main():
 
         print(f'RANK = {rank}')
 
-        # compute decoupling
-
+        # ------------------------------------------------------------------
+        # Compute decoupling (unchanged from original)
+        # ------------------------------------------------------------------
         min_err = jnp.inf
         best_decoupling = None
 
-        for k in jax.random.split(key, ntries):
+        for k in jax.random.split(key, ntries)[3:4]:
             decoupling, _ = algorithm.cmtf_psd(X, Y_scaled, J_scaled, rank, niters, key=k)
 
             dparams = [decoupling.V, decoupling.W]
@@ -135,10 +173,9 @@ def main():
         same = jnp.mean(preds_decoupling == preds_nn)
         print(f'Same = {same*100:.2f}%')
 
-        def dcompute_loss(dparams, X, y):
-            logits = batch_dforward(dparams, X)
-            return jnp.mean(celoss(logits, y))
-
+        # ------------------------------------------------------------------
+        # Evaluation helper (unchanged)
+        # ------------------------------------------------------------------
         def evaluate_decoupling(dparams, loader):
             accuracy = 0.0
             for i, (X, y) in enumerate(tqdm(loader, desc='Decoupling Evaluation')):
@@ -147,23 +184,49 @@ def main():
                 accuracy += (jnp.mean(preds == y) - accuracy) / (i+1)
             print(f'\nAccuracy = {accuracy*100:.2f}% ===================\n')
 
+        # ------------------------------------------------------------------
+        # Fine-tuning with Knowledge Distillation
+        #
+        # Instead of minimising CE(true_labels, f̂), we minimise:
+        #
+        #   L = KL( softmax(f(x)/T) || softmax(f̂(x)/T) )
+        #
+        # i.e. the student is trained purely to match the teacher's soft
+        # probability distribution at temperature T.  The internals g are
+        # frozen; only V and W are updated.
+        # ------------------------------------------------------------------
+
+        def ce_loss(dparams, X, y):
+            logits = batch_dforward(dparams, X)
+            return jnp.mean(celoss(logits, y))
+
+        def dcompute_kd_loss(dparams, X, y, temperature):
+            W, V = dparams
+            V = jax.lax.stop_gradient(V)
+            student_logits = batch_dforward([W, V], X)
+            # Teacher logits: stop gradient so we don't backprop into params
+            teacher_logits = jax.lax.stop_gradient(batch_forward(params, X))
+            return ce_loss(dparams, X, y) + 0.5*batch_kd_loss(teacher_logits, student_logits, temperature)
+
         doptim = optax.adam(learning_rate=1e-3)
         dstate = doptim.init(dparams)
 
-        #@jax.jit
-        def dstep(dparams, dstate, X, y):
-            loss, grads = jax.value_and_grad(dcompute_loss)(dparams, X, y)
+        def dstep(dparams, dstate, X, y, temperature):
+            loss, grads = jax.value_and_grad(dcompute_kd_loss)(dparams, X, y, temperature)
             updates, dstate = doptim.update(grads, dstate)
             dparams = optax.apply_updates(dparams, updates)
             return dparams, dstate, loss
 
+        # Evaluate before fine-tuning
         evaluate_decoupling(dparams, testloader)
 
-        bar = tqdm(trainloader, desc='Fine-tuning')
+        bar = tqdm(trainloader, desc=f'Fine-tuning (KD, T={temperature})')
         for _, (Xb, yb) in enumerate(bar):
-            dparams, dstate, loss = dstep(dparams, dstate, Xb, yb)
+            # Note: true labels yb are not used — pure distillation
+            dparams, dstate, loss = dstep(dparams, dstate, Xb, yb, temperature)
             bar.set_postfix(loss=f'{loss:.4f}')
 
+        # Evaluate after fine-tuning
         evaluate_decoupling(dparams, testloader)
 
         preds_decoupling = jnp.argmax(batch_dforward(dparams, X), axis=-1)
@@ -172,4 +235,3 @@ def main():
         print(f'Same = {same*100:.2f}%')
 
 if __name__ == '__main__': main()
-

@@ -1,6 +1,6 @@
 import random
 import jax, jax.numpy as jnp
-from jaxtyping import jaxtyped, Array, Float
+from jaxtyping import jaxtyped, Array, Float, ArrayLike, Num
 from bsplx import design_matrix, design_dmatrix, bspline_inference
 from functools import partial
 from beartype import beartype 
@@ -87,6 +87,16 @@ def fit_internal_with_best_coefs(coefs, knots, degree):
         B = get_design_matrix(jnp.atleast_1d(x), knots, degree)
         return jnp.squeeze(B @ coefs)
     return g
+
+def apply_internals(Z, C, knots, degree):
+    coefs_stacked = jnp.stack(C)
+    knots_stacked = jnp.stack(knots)
+    
+    def single_internal(zi, ci, ki):
+        B = get_design_matrix(jnp.atleast_1d(zi), ki, degree)
+        return (B @ ci).squeeze()
+    
+    return jax.vmap(single_internal)(Z, coefs_stacked, knots_stacked)
 
 def fit_internals_with_best_coefs(coefs_list, knots_list, degree):
     internals = []
@@ -183,3 +193,8 @@ def _closest(knot, u):
 
 def default_dof(N):
     return max(min([2*int(jnp.sqrt(N))+1, N//2]), 1)
+
+# dtype
+
+def as_float_array(array: ArrayLike) -> Array:
+    return jnp.asarray(array, dtype=jnp.result_type(array, jnp.float32))

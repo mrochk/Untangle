@@ -1,1 +1,1 @@
-from .basic import basic_decoupling
+from .basic import BasicDecoupling
